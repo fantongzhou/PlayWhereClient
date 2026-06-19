@@ -30,9 +30,11 @@ export { requestIdleCallback, cancelIdleCallback } from '#app/compat/idle-callba
 export { setInterval } from '#app/compat/interval';
 export { definePageMeta } from '../node_modules/nuxt/dist/pages/runtime/composables';
 export { defineLazyHydrationComponent } from '#app/composables/lazy-hydration';
+export { useChatSSE } from '../composables/useChatSSE';
 export { useRoutes } from '../composables/useRoutes';
 export { useSSE } from '../composables/useSSE';
 export { useAgentStore } from '../stores/agent';
+export { useChatStore, ChatMessage } from '../stores/chat';
 export { useTripStore } from '../stores/trip';
 export { defineStore, acceptHMRUpdate, usePinia, storeToRefs } from '../node_modules/@pinia/nuxt/dist/runtime/composables';
 export { useNuxtDevTools } from '../node_modules/@nuxt/devtools/dist/runtime/use-nuxt-devtools';

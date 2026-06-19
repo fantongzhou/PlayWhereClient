@@ -91,6 +91,11 @@ async function handleSubmit() {
       <button class="submit-btn" @click="handleSubmit" :disabled="isStreaming">
         {{ isStreaming ? '规划中...' : '开始规划 🚀' }}
       </button>
+
+      <!-- 对话模式入口 -->
+      <NuxtLink to="/chat" class="chat-mode-link" title="自由对话模式（美团酒店/门票/机票）">
+        💬
+      </NuxtLink>
     </div>
 
     <div class="error-msg" v-if="error">{{ error }}</div>
@@ -239,5 +244,25 @@ async function handleSubmit() {
   color: var(--error);
   border-radius: 8px;
   font-size: 13px;
+}
+
+.chat-mode-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: var(--bg-panel);
+  font-size: 18px;
+  text-decoration: none;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.chat-mode-link:hover {
+  background: #eff6ff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
 }
 </style>

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 const tripStore = useTripStore();
 useRoutes();
+
+// 工具数量：6 个内置 + 3 个美团 = 9
+const agentToolsCount = 9;
 </script>
 
 <template>
@@ -33,12 +36,16 @@ useRoutes();
         </div>
         <div class="feature">
           <span class="feature-icon">🔧</span>
-          <span>6 个工具自动调用</span>
+          <span>{{ agentToolsCount }} 个工具自动调用</span>
         </div>
         <div class="feature">
           <span class="feature-icon">📊</span>
           <span>实时思考过程可视化</span>
         </div>
+      </div>
+      <div class="mode-links">
+        <span>或试试</span>
+        <NuxtLink to="/chat" class="chat-link">💬 自由对话模式（美团酒店/门票/机票）</NuxtLink>
       </div>
     </div>
 
@@ -126,5 +133,19 @@ useRoutes();
 
 .feature-icon {
   font-size: 28px;
+}
+
+.mode-links {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.chat-link {
+  color: var(--primary);
+  font-weight: 500;
 }
 </style>
