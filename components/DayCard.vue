@@ -35,6 +35,15 @@ defineProps<{ day: DayPlan }>();
       <div class="hotel-info">
         <strong>{{ day.hotel.name }}</strong>
         <span class="hotel-price">¥{{ day.hotel.pricePerNight }}/晚</span>
+        <a
+          v-if="day.hotel.bookingUrl"
+          :href="day.hotel.bookingUrl"
+          target="_blank"
+          rel="noopener"
+          class="hotel-booking-link"
+        >
+          🏨 立即预订
+        </a>
       </div>
     </div>
   </div>
@@ -110,5 +119,25 @@ defineProps<{ day: DayPlan }>();
   font-size: 12px;
   color: var(--primary);
   font-weight: 500;
+}
+
+.hotel-booking-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-radius: 4px;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.hotel-booking-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(16, 185, 129, 0.3);
 }
 </style>

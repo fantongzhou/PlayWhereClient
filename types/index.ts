@@ -17,6 +17,8 @@ export interface Activity {
   type: 'attraction' | 'restaurant' | 'hotel';
   duration: string;
   note: string;
+  /** 购票/预订链接（美团返回） */
+  bookingUrl?: string;
 }
 
 export interface DayPlan {
@@ -33,6 +35,8 @@ export interface DayPlan {
     lat: number;
     lng: number;
     pricePerNight: number;
+    /** 预订链接（美团返回） */
+    bookingUrl?: string;
   } | null;
 }
 
@@ -58,12 +62,12 @@ export interface ThinkingStep {
 }
 
 // ---- 预设选项 ----
-export const CITIES = ['京都', '东京', '大阪'] as const;
+export const CITIES = ['北京', '上海', '三亚', '成都', '西安', '杭州'] as const;
 
 export const PREFERENCES = [
   { label: '文化历史', icon: '🏛️' },
   { label: '自然风光', icon: '🏔️' },
-  { label: '美食购物', icon: '🍣' },
+  { label: '美食购物', icon: '🍜' },
   { label: '娱乐休闲', icon: '🎢' },
   { label: '亲子游', icon: '👨‍👩‍👧' },
 ] as const;
@@ -84,3 +88,17 @@ export const BUDGETS = [
   { label: '适中', value: 'moderate', icon: '💎' },
   { label: '奢华', value: 'luxury', icon: '👑' },
 ] as const;
+
+// 城市中心坐标（国内）
+export const CITY_CENTERS: Record<string, [number, number]> = {
+  '北京': [39.9042, 116.4074],
+  '上海': [31.2304, 121.4737],
+  '三亚': [18.2528, 109.5120],
+  '成都': [30.5728, 104.0668],
+  '西安': [34.3416, 108.9398],
+  '杭州': [30.2741, 120.1551],
+};
+
+// 中国地图默认中心与边界
+export const CHINA_CENTER: [number, number] = [35.86, 104.19];
+export const CHINA_BOUNDS: [[number, number], [number, number]] = [[18, 73], [54, 135]];

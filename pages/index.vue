@@ -28,11 +28,11 @@ const agentToolsCount = 9;
     <div class="empty-state" v-if="!tripStore.plan && !tripStore.loading">
       <div class="empty-icon">🗺️</div>
       <h2>AI 旅行规划 Agent</h2>
-      <p>选择目的地与偏好，让 AI 为你规划完美旅程</p>
+      <p>选择国内目的地与偏好，AI 通过美团酒旅数据为你规划完美旅程</p>
       <div class="empty-features">
         <div class="feature">
-          <span class="feature-icon">🤖</span>
-          <span>多步 ReAct Agent 循环</span>
+          <span class="feature-icon">🏨</span>
+          <span>美团酒店/门票/机票实时数据</span>
         </div>
         <div class="feature">
           <span class="feature-icon">🔧</span>
@@ -45,7 +45,7 @@ const agentToolsCount = 9;
       </div>
       <div class="mode-links">
         <span>或试试</span>
-        <NuxtLink to="/chat" class="chat-link">💬 自由对话模式（美团酒店/门票/机票）</NuxtLink>
+        <NuxtLink to="/chat" class="chat-link">💬 自由对话模式（更灵活的美团查询）</NuxtLink>
       </div>
     </div>
 

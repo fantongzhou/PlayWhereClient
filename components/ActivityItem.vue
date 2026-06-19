@@ -32,6 +32,17 @@ const typeConfig: Record<string, { icon: string; color: string }> = {
           <span class="duration">{{ activity.duration }}</span>
         </div>
         <p class="activity-note" v-if="activity.note">{{ activity.note }}</p>
+
+        <!-- 购票/预订链接 -->
+        <a
+          v-if="activity.bookingUrl"
+          :href="activity.bookingUrl"
+          target="_blank"
+          rel="noopener"
+          class="booking-link"
+        >
+          🎫 {{ activity.type === 'restaurant' ? '订座/外卖' : activity.type === 'hotel' ? '立即预订' : '购票/预订' }}
+        </a>
       </div>
     </div>
   </div>
@@ -129,5 +140,25 @@ const typeConfig: Record<string, { icon: string; color: string }> = {
   color: var(--text-secondary);
   margin-top: 4px;
   padding-left: 30px;
+}
+
+.booking-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  border-radius: 6px;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.booking-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 </style>

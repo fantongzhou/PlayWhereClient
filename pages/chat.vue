@@ -6,7 +6,7 @@ import type { ThinkingStep } from '../types';
 
 definePageMeta({ layout: false });
 
-const { sendMessage, isStreaming, error } = useChatSSE();
+const { sendMessage, isStreaming, error, clearMemory } = useChatSSE();
 const chatStore = useChatStore();
 
 const inputText = ref('');
@@ -56,11 +56,16 @@ function handleQuickPrompt(prompt: string) {
   handleSend();
 }
 
+async function handleNewChat() {
+  await clearMemory();
+  chatStore.clearMessages();
+}
+
 function toggleSteps(msgId: string) {
   showSteps.value[msgId] = !showSteps.value[msgId];
 }
 
-// ---- Markdown 渲染 ----
+// ---- Markdown 渲染（美团输出规范强化版） ----
 function renderMarkdown(text: string): string {
   if (!text) return '';
 
@@ -70,33 +75,142 @@ function renderMarkdown(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // 图片 ![](url) — 必须在链接之前处理
+  // 1. 图片 ![](url) — 必须在链接之前处理
   html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
-    return `<img src="${url}" alt="${alt}" loading="lazy" class="md-image" onerror="this.style.display='none'" />`;
+    const escapedUrl = url.replace(/"/g, '&quot;');
+    return `<img src="${escapedUrl}" alt="${alt || '图片'}" loading="lazy" class="md-image" onerror="this.style.display='none'" />`;
   });
 
-  // 链接 [text](url)
+  // 2. 检测裸图片 URL（未被 ![]() 包裹的图片链接）→ 自动转为内嵌图片
+  //    匹配以 http 开头、以常见图片扩展名结尾的 URL（排除已被 <img> 标签包裹的）
+  html = html.replace(
+    /(?<!src=")(https?:\/\/[^\s<>"']+\.(?:jpg|jpeg|png|webp)(?:\?[^\s<>"']*)?)/gi,
+    (match, url) => {
+      return `<img src="${url}" alt="图片" loading="lazy" class="md-image" onerror="this.style.display='none'" />`;
+    },
+  );
+
+  // 3. 链接 [text](url)
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="md-link">$1</a>');
 
-  // 粗体 **text**
+  // 4. 检测裸 URL（http/https，但排除已被处理的图片/链接）→ 自动转为链接
+  html = html.replace(
+    /(?<![">])(?<!href=")(?<!src=")(https?:\/\/[^\s<>"'\n]+)/g,
+    (match) => {
+      // 排除已经是图片标签或链接标签中的 URL
+      if (match.endsWith('.jpg') || match.endsWith('.jpeg') || match.endsWith('.png') || match.endsWith('.webp')) {
+        return match; // 图片 URL 已在上面处理
+      }
+      // 截断过长的 URL 显示文本
+      const display = match.length > 60 ? match.slice(0, 57) + '...' : match;
+      return `<a href="${match}" target="_blank" rel="noopener" class="md-link">${display}</a>`;
+    },
+  );
+
+  // 5. 粗体 **text**
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 
-  // 行内代码 `code`
+  // 6. 行内代码 `code`
   html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
 
-  // 处理换行：双换行变段落，单换行变 <br>
+  // 7. 处理 Markdown 表格（将 | col | col | 转为 HTML table）
+  html = renderTables(html);
+
+  // 8. 处理换行：双换行变段落，单换行变 <br>
   html = html
     .split(/\n\n+/)
     .map(para => {
       const trimmed = para.trim();
       if (!trimmed) return '';
       // 跳过已经是块级元素的段落（图片、表格等）
-      if (trimmed.startsWith('<img')) return trimmed;
+      if (trimmed.startsWith('<img') || trimmed.startsWith('<table')) return trimmed;
       return `<p class="md-paragraph">${trimmed.replace(/\n/g, '<br>')}</p>`;
     })
     .join('');
 
   return html;
+}
+
+/** 简单的 Markdown 表格渲染 */
+function renderTables(html: string): string {
+  const lines = html.split('\n');
+  const result: string[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // 检测表格行：以 | 开头或包含多个 |
+    if (line.trim().startsWith('|') && line.includes('|')) {
+      const tableRows: string[] = [line];
+
+      // 收集连续的表格行
+      let j = i + 1;
+      while (j < lines.length && lines[j].trim().startsWith('|') && lines[j].includes('|')) {
+        tableRows.push(lines[j]);
+        j++;
+      }
+
+      // 至少需要 2 行（表头 + 分隔行 或 表头 + 数据行）
+      if (tableRows.length >= 2) {
+        const tableHtml = buildTable(tableRows);
+        if (tableHtml) {
+          result.push(tableHtml);
+          i = j;
+          continue;
+        }
+      }
+    }
+
+    result.push(line);
+    i++;
+  }
+
+  return result.join('\n');
+}
+
+function buildTable(rows: string[]): string | null {
+  if (rows.length < 2) return null;
+
+  const parseRow = (row: string) =>
+    row
+      .trim()
+      .replace(/^\||\|$/g, '')
+      .split('|')
+      .map(cell => cell.trim());
+
+  // 检测分隔行（如 |---|---|）
+  const isSeparator = (row: string) => /^\|[\s\-:]+\|[\s\-:|]*\|?$/.test(row);
+
+  const headerCells = parseRow(rows[0]);
+
+  let dataStart = 1;
+  // 跳过可能的分隔行
+  if (isSeparator(rows[1])) {
+    dataStart = 2;
+  }
+
+  const dataRows = rows.slice(dataStart).map(parseRow);
+
+  // 确保数据不是空的
+  if (dataRows.length === 0) return null;
+
+  let tableHtml = '<table class="md-table"><thead><tr>';
+  for (const cell of headerCells) {
+    tableHtml += `<th>${cell}</th>`;
+  }
+  tableHtml += '</tr></thead><tbody>';
+  for (const row of dataRows) {
+    tableHtml += '<tr>';
+    // 用表头列数对齐
+    for (let c = 0; c < headerCells.length; c++) {
+      tableHtml += `<td>${row[c] || ''}</td>`;
+    }
+    tableHtml += '</tr>';
+  }
+  tableHtml += '</tbody></table>';
+
+  return tableHtml;
 }
 
 // ---- 工具步骤格式化 ----
@@ -141,9 +255,19 @@ function formatJSON(data: unknown): string {
         <h1>🤖 AI 旅行助手</h1>
         <span class="subtitle">基于美团酒旅数据 · 支持酒店/门票/机票/攻略</span>
       </div>
-      <NuxtLink to="/" class="planner-link">
-        📋 行程规划器
-      </NuxtLink>
+      <div class="header-right">
+        <button
+          class="new-chat-btn"
+          @click="handleNewChat"
+          :disabled="isStreaming"
+          title="开始新对话（清除记忆）"
+        >
+          🆕 新对话
+        </button>
+        <NuxtLink to="/" class="planner-link">
+          📋 行程规划器
+        </NuxtLink>
+      </div>
     </header>
 
     <!-- 消息列表 -->
@@ -305,6 +429,33 @@ function formatJSON(data: unknown): string {
   font-size: 12px;
   color: var(--text-secondary);
   margin-left: 4px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.new-chat-btn {
+  font-size: 12px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.new-chat-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.new-chat-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .planner-link {
@@ -488,6 +639,30 @@ function formatJSON(data: unknown): string {
 
 .ai-content :deep(strong) {
   font-weight: 600;
+}
+
+/* 美团输出中 "(美团真实评分)" 和 "(美团实时数据)" 高亮 */
+.ai-content :deep(.md-table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 13px;
+}
+
+.ai-content :deep(.md-table th),
+.ai-content :deep(.md-table td) {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.ai-content :deep(.md-table th) {
+  background: var(--bg-panel);
+  font-weight: 600;
+}
+
+.ai-content :deep(.md-table tr:nth-child(even) td) {
+  background: rgba(0, 0, 0, 0.015);
 }
 
 .cursor-blink {

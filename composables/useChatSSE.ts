@@ -8,6 +8,16 @@ export function useChatSSE() {
 
   const chatStore = useChatStore();
 
+  /** 从 localStorage 获取或生成 sessionId */
+  function getOrCreateSessionId(): string {
+    const stored = localStorage.getItem('chat_session_id');
+    if (stored) return stored;
+
+    const newId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    localStorage.setItem('chat_session_id', newId);
+    return newId;
+  }
+
   async function sendMessage(message: string): Promise<void> {
     if (!message.trim()) return;
 
@@ -21,11 +31,13 @@ export function useChatSSE() {
     // 创建 assistant 消息占位
     const assistantId = chatStore.createAssistantMessage();
 
+    const sessionId = getOrCreateSessionId();
+
     try {
       const response = await fetch('/api/plan/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, sessionId }),
       });
 
       if (!response.ok) {
@@ -55,7 +67,10 @@ export function useChatSSE() {
 
               switch (event.type as SSEEventType) {
                 case 'start':
-                  // 可以在这里处理开始事件
+                  // 服务器可能返回新的 sessionId
+                  if (event.data?.sessionId) {
+                    localStorage.setItem('chat_session_id', event.data.sessionId);
+                  }
                   break;
 
                 case 'thought':
@@ -131,5 +146,20 @@ export function useChatSSE() {
     }
   }
 
-  return { isStreaming, error, sendMessage };
+  /** 清除当前会话记忆（开始新对话） */
+  async function clearMemory(): Promise<void> {
+    const sessionId = localStorage.getItem('chat_session_id');
+    if (sessionId) {
+      try {
+        await fetch(`/api/plan/chat/memory?sessionId=${encodeURIComponent(sessionId)}`, {
+          method: 'DELETE',
+        });
+      } catch {
+        // 忽略清理失败
+      }
+    }
+    localStorage.removeItem('chat_session_id');
+  }
+
+  return { isStreaming, error, sendMessage, clearMemory };
 }

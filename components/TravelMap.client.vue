@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import type { Map, TileLayer, Marker, Polyline } from 'leaflet';
 import { useTripStore } from '../stores/trip';
+import { CITY_CENTERS, CHINA_CENTER, CHINA_BOUNDS } from '../types';
 import type { RouteSegment } from '../types';
 
 const tripStore = useTripStore();
@@ -11,13 +12,6 @@ let tileLayer: TileLayer | null = null;
 let markers: Marker[] = [];
 let polylines: Polyline[] = [];
 let routeLabels: Marker[] = [];
-
-// 城市中心坐标
-const cityCenters: Record<string, [number, number]> = {
-  '京都': [35.0116, 135.7681],
-  '东京': [35.6762, 139.6503],
-  '大阪': [34.6937, 135.5023],
-};
 
 function clearMap() {
   markers.forEach(m => m.remove());
@@ -203,7 +197,12 @@ async function initMap() {
 
   if (!mapContainer.value) return;
 
-  map = L.map(mapContainer.value).setView(cityCenters['京都'], 13);
+  map = L.map(mapContainer.value, {
+    center: CHINA_CENTER,
+    zoom: 5,
+    maxBounds: L.latLngBounds(CHINA_BOUNDS[0], CHINA_BOUNDS[1]),
+    maxBoundsViscosity: 0.8,
+  });
 
   tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',
@@ -218,7 +217,7 @@ onMounted(async () => {
 // 监听行程数据变化
 watch(() => tripStore.plan, (plan) => {
   if (!plan || !map) return;
-  const center = cityCenters[plan.city] || [35.0116, 135.7681];
+  const center = CITY_CENTERS[plan.city] || CHINA_CENTER;
   map.setView(center, 13);
   renderDayOnMap();
 });
