@@ -1,4 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+
+const isDev = process.env.NODE_ENV === 'development'
+
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
@@ -16,7 +19,7 @@ export default defineNuxtConfig({
   nitro: {
     devProxy: {
       '/api': {
-        target: 'http://localhost:3333',
+        target: isDev ? 'http://localhost:3333' : 'https://play-where-server.vercel.app/',
         changeOrigin: true,
       },
     },
