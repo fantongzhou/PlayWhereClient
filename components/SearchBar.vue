@@ -5,7 +5,7 @@ import { CITIES, PREFERENCES, BUDGETS } from '../types';
 
 const { startPlanning, isStreaming, error } = useSSE();
 
-const city = ref('京都');
+const city = ref('北京');
 const days = ref(5);
 const selectedPrefs = ref<string[]>([]);
 const budget = ref<string>('moderate');
