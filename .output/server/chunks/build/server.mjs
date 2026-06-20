@@ -429,11 +429,18 @@ function getRouteRules(arg) {
     return {};
   }
 }
+const __nuxt_page_meta = { layout: false };
 const _routes = [
+  {
+    name: "chat",
+    path: "/chat",
+    meta: __nuxt_page_meta || {},
+    component: () => import('./chat-BZP3M1YU.mjs')
+  },
   {
     name: "index",
     path: "/",
-    component: () => import('./index-BMo6U2r5.mjs')
+    component: () => import('./index-DKXJjmdI.mjs')
   }
 ];
 const ROUTE_KEY_PARENTHESES_RE = /(:\w+)\([^)]+\)/g;
@@ -1323,7 +1330,7 @@ const _sfc_main$1 = {
     const statusText = _error.statusMessage ?? (is404 ? "Page Not Found" : "Internal Server Error");
     const description = _error.message || _error.toString();
     const stack = void 0;
-    const _Error404 = defineAsyncComponent(() => import('./error-404-Cos5Wkey.mjs'));
+    const _Error404 = defineAsyncComponent(() => import('./error-404-DxR_e7Xo.mjs'));
     const _Error = defineAsyncComponent(() => import('./error-500-cTt3ewWq.mjs'));
     const ErrorTemplate = is404 ? _Error404 : _Error;
     return (_ctx, _push, _parent, _attrs) => {
@@ -1416,5 +1423,5 @@ let entry;
 }
 const entry_default = ((ssrContext) => entry(ssrContext));
 
-export { _export_sfc as _, useNuxtApp as a, useRuntimeConfig as b, nuxtLinkDefaults as c, defineStore as d, entry_default as default, encodeRoutePath as e, __nuxt_component_1 as f, navigateTo as n, resolveRouteObject as r, tryUseNuxtApp as t, useRouter as u };
+export { _export_sfc as _, __nuxt_component_1 as a, useNuxtApp as b, useRuntimeConfig as c, defineStore as d, entry_default as default, encodeRoutePath as e, nuxtLinkDefaults as f, navigateTo as n, resolveRouteObject as r, tryUseNuxtApp as t, useRouter as u };
 //# sourceMappingURL=server.mjs.map

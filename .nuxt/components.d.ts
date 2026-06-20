@@ -16,6 +16,7 @@ type LazyComponent<T> = DefineComponent<HydrationStrategies, {}, {}, {}, {}, {},
 
 export const ActivityItem: typeof import("../components/ActivityItem.vue")['default']
 export const DayCard: typeof import("../components/DayCard.vue")['default']
+export const ImagePreview: typeof import("../components/ImagePreview.vue")['default']
 export const LoadingOverlay: typeof import("../components/LoadingOverlay.vue")['default']
 export const SearchBar: typeof import("../components/SearchBar.vue")['default']
 export const ThinkingPanel: typeof import("../components/ThinkingPanel.vue")['default']
@@ -46,6 +47,7 @@ export const Body: typeof import("../node_modules/nuxt/dist/head/runtime/compone
 export const NuxtIsland: typeof import("../node_modules/nuxt/dist/app/components/nuxt-island")['default']
 export const LazyActivityItem: LazyComponent<typeof import("../components/ActivityItem.vue")['default']>
 export const LazyDayCard: LazyComponent<typeof import("../components/DayCard.vue")['default']>
+export const LazyImagePreview: LazyComponent<typeof import("../components/ImagePreview.vue")['default']>
 export const LazyLoadingOverlay: LazyComponent<typeof import("../components/LoadingOverlay.vue")['default']>
 export const LazySearchBar: LazyComponent<typeof import("../components/SearchBar.vue")['default']>
 export const LazyThinkingPanel: LazyComponent<typeof import("../components/ThinkingPanel.vue")['default']>

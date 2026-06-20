@@ -1,13 +1,20 @@
 <script setup lang="ts">
 import type { Activity } from '../types';
+import { ref, computed } from 'vue';
+import ImagePreview from './ImagePreview.vue';
 
-defineProps<{ activity: Activity; index: number; isLast: boolean }>();
+const props = defineProps<{ activity: Activity; index: number; isLast: boolean }>();
 
 const typeConfig: Record<string, { icon: string; color: string }> = {
   attraction: { icon: '📍', color: '#2563eb' },
   restaurant: { icon: '🍽️', color: '#f59e0b' },
   hotel: { icon: '🏨', color: '#10b981' },
 };
+
+// 景点图片：美团返回的 imageUrls，过滤空值
+const images = computed(() => props.activity.imageUrls?.filter(u => !!u) ?? []);
+// 图片预览当前索引（null = 关闭）
+const previewIndex = ref<number | null>(null);
 </script>
 
 <template>
@@ -33,6 +40,20 @@ const typeConfig: Record<string, { icon: string; color: string }> = {
         </div>
         <p class="activity-note" v-if="activity.note">{{ activity.note }}</p>
 
+        <!-- 景点图片缩略图（横向滚动） -->
+        <div class="image-strip" v-if="images.length">
+          <img
+            v-for="(img, i) in images"
+            :key="i"
+            :src="img"
+            :alt="activity.name"
+            loading="lazy"
+            class="thumb"
+            @click="previewIndex = i"
+            @error="($event.target as HTMLImageElement).style.display = 'none'"
+          />
+        </div>
+
         <!-- 购票/预订链接 -->
         <a
           v-if="activity.bookingUrl"
@@ -44,6 +65,13 @@ const typeConfig: Record<string, { icon: string; color: string }> = {
           🎫 {{ activity.type === 'restaurant' ? '订座/外卖' : activity.type === 'hotel' ? '立即预订' : '购票/预订' }}
         </a>
       </div>
+
+      <!-- 图片预览（相册） -->
+      <ImagePreview
+        v-if="previewIndex !== null"
+        :images="images"
+        v-model="previewIndex"
+      />
     </div>
   </div>
 </template>
@@ -140,6 +168,31 @@ const typeConfig: Record<string, { icon: string; color: string }> = {
   color: var(--text-secondary);
   margin-top: 4px;
   padding-left: 30px;
+}
+
+.image-strip {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  padding-left: 30px;
+  overflow-x: auto;
+}
+
+.thumb {
+  width: 64px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.thumb:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 }
 
 .booking-link {
