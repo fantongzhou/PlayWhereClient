@@ -1,7 +1,5 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 
-const isDev = process.env.NODE_ENV === 'development'
-
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
@@ -12,6 +10,16 @@ export default defineNuxtConfig({
     'leaflet/dist/leaflet.css',
   ],
 
+  // 线上环境接口 baseurl；开发环境留空走 devProxy/vite proxy
+  runtimeConfig: {
+    public: {
+      apiBase: process.env.NUXT_PUBLIC_API_BASE
+        || (process.env.NODE_ENV === 'production'
+          ? 'https://play-where-server.vercel.app'
+          : ''),
+    },
+  },
+
   devServer: {
     port: 5173,
   },
@@ -19,7 +27,7 @@ export default defineNuxtConfig({
   nitro: {
     devProxy: {
       '/api': {
-        target: isDev ? 'http://localhost:3333' : 'https://play-where-server.vercel.app/',
+        target: 'http://localhost:3333',
         changeOrigin: true,
       },
     },

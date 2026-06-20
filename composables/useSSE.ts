@@ -9,6 +9,7 @@ export function useSSE() {
 
   const tripStore = useTripStore();
   const agentStore = useAgentStore();
+  const apiBase = useApiBase();
 
   async function startPlanning(request: TripRequest): Promise<TripPlan | null> {
     isStreaming.value = true;
@@ -19,7 +20,7 @@ export function useSSE() {
     tripStore.setRequest(request);
 
     try {
-      const response = await fetch('/api/plan', {
+      const response = await fetch(`${apiBase}/api/plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),

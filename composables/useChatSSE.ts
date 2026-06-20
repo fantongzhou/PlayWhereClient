@@ -7,6 +7,7 @@ export function useChatSSE() {
   const error = ref<string | null>(null);
 
   const chatStore = useChatStore();
+  const apiBase = useApiBase();
 
   /** 从 localStorage 获取或生成 sessionId */
   function getOrCreateSessionId(): string {
@@ -34,7 +35,7 @@ export function useChatSSE() {
     const sessionId = getOrCreateSessionId();
 
     try {
-      const response = await fetch('/api/plan/chat', {
+      const response = await fetch(`${apiBase}/api/plan/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, sessionId }),
@@ -151,7 +152,7 @@ export function useChatSSE() {
     const sessionId = localStorage.getItem('chat_session_id');
     if (sessionId) {
       try {
-        await fetch(`/api/plan/chat/memory?sessionId=${encodeURIComponent(sessionId)}`, {
+        await fetch(`${apiBase}/api/plan/chat/memory?sessionId=${encodeURIComponent(sessionId)}`, {
           method: 'DELETE',
         });
       } catch {

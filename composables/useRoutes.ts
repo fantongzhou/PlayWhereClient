@@ -4,6 +4,7 @@ import type { RouteSegment, Activity } from '../types';
 
 export function useRoutes() {
   const tripStore = useTripStore();
+  const apiBase = useApiBase();
 
   async function fetchRoutesForDay(day: number): Promise<RouteSegment[]> {
     const dayPlan = tripStore.plan?.days.find(d => d.day === day);
@@ -30,7 +31,7 @@ export function useRoutes() {
     if (waypoints.length < 2) return [];
 
     try {
-      const res = await fetch('/api/routes', {
+      const res = await fetch(`${apiBase}/api/routes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ waypoints }),
