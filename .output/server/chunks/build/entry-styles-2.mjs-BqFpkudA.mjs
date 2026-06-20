@@ -1,4 +1,0 @@
-const app_vue_vue_type_style_index_0_lang = ":root{--primary:#2563eb;--primary-light:#3b82f6;--bg:#f8fafc;--bg-card:#fff;--bg-panel:#f1f5f9;--text:#1e293b;--text-secondary:#64748b;--border:#e2e8f0;--success:#10b981;--warning:#f59e0b;--error:#ef4444;--radius:10px;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06)}*{box-sizing:border-box;margin:0;padding:0}body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,sans-serif;overflow:hidden}#__nuxt,body{height:100vh}::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}::-webkit-scrollbar-thumb:hover{background:#94a3b8}";
-
-export { app_vue_vue_type_style_index_0_lang as a };
-//# sourceMappingURL=entry-styles-2.mjs-BqFpkudA.mjs.map
