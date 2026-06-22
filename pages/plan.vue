@@ -59,7 +59,7 @@ const {
             <div class="text-5xl">🗺️</div>
             <div>
               <h2 class="text-lg font-bold text-slate-800 mb-1">用自然语言描述您的旅行需求</h2>
-              <p class="text-sm text-slate-500 max-w-sm">我会自动分析目的地、天数、偏好，通过美团数据为您规划完美旅程</p>
+              <p class="text-sm text-slate-500 max-w-sm">我会自动分析目的地、天数、偏好，通过飞猪数据为您规划完美旅程</p>
             </div>
             <div class="flex flex-wrap gap-2 justify-center mt-2">
               <button

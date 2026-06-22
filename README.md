@@ -53,6 +53,7 @@ npm run dev            # :5173，API 代理到 localhost:3333
 | `DayCard.vue` | 单日卡片：天气条 + 活动时间线 + 酒店信息 |
 | `ActivityItem.vue` | 单条活动：时间、类型徽章、名称、时长、备注、图片条、预订链接 |
 | `ImagePreview.vue` | 全屏图片预览，支持键盘导航（← → Esc） |
+
 ## Composables
 
 | Composable | 说明 |
@@ -97,4 +98,4 @@ types/
 
 ---
 
-> 📝 本文档随功能变更同步维护。最后更新：2026-06-21
+> 📝 本文档随功能变更同步维护。最后更新：2026-06-22

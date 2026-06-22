@@ -142,7 +142,7 @@ export function usePlanChat() {
     switch (step.type) {
       case 'action':
         if (step.tool === 'get_weather') return '正在查询目的地天气...';
-        if (step.tool === 'search_meituan_travel') return '正在搜索美团旅行数据...';
+        if (step.tool === 'search_fliggy_travel') return '正在搜索飞猪旅行数据...';
         if (step.tool === 'get_route') return '正在规划交通路线...';
         return step.tool ? `调用 ${step.tool}` : '工具调用';
       case 'observation': return '已获取数据，正在分析...';

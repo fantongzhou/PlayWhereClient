@@ -13,8 +13,8 @@ const features = [
   },
   {
     icon: '🎯',
-    title: '美团真实数据',
-    desc: '景点、餐厅、酒店均来自美团酒旅真实数据，价格透明，支持一键预订。',
+    title: '飞猪真实数据',
+    desc: '景点、餐厅、酒店均来自飞猪酒旅真实数据，价格透明，支持一键预订。',
   },
   {
     icon: '🌤️',
@@ -35,9 +35,9 @@ const features = [
 
 const steps = [
   { step: '01', title: '描述您的旅行需求', desc: '用自然语言告诉AI：目的地、天数、偏好、预算——就像跟旅行顾问聊天一样简单。' },
-  { step: '02', title: 'AI 智能分析与规划', desc: 'DeepSeek 大模型自动分析需求，结合美团真实数据和高德地图，秒级生成个性化行程。' },
+  { step: '02', title: 'AI 智能分析与规划', desc: 'DeepSeek 大模型自动分析需求，结合飞猪真实数据和高德地图，秒级生成个性化行程。' },
   { step: '03', title: '查看与调整行程', desc: '地图上可视化查看完整路线，自由切换交通方式，调整景点顺序——一切尽在掌控。' },
-  { step: '04', title: '一键预订出发', desc: '确认行程后，直接通过美团链接预订酒店和门票，开启完美旅程。' },
+  { step: '04', title: '一键预订出发', desc: '确认行程后，直接通过飞猪链接预订酒店和门票，开启完美旅程。' },
 ];
 </script>
 
@@ -79,7 +79,7 @@ const steps = [
         </h1>
         <p class="mt-6 text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
           只需用自然语言描述需求，AI 自动分析目的地、天数、偏好和预算，
-          基于美团真实数据和高德地图，秒级生成完整旅行计划。
+          基于飞猪真实数据和高德地图，秒级生成完整旅行计划。
         </p>
 
         <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -194,7 +194,7 @@ const steps = [
           <a href="#" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">使用条款</a>
         </div>
         <p class="text-xs text-slate-400">
-          © 2024 Stitch AI. Powered by DeepSeek · 高德地图 · 美团
+          © 2024 Stitch AI. Powered by DeepSeek · 高德地图 · 飞猪
         </p>
       </div>
     </footer>

@@ -68,7 +68,7 @@ function newChat() {
           <div class="text-4xl">🗺️</div>
           <div>
             <h2 class="text-base font-bold text-slate-800 mb-1">用自然语言描述您的旅行需求</h2>
-            <p class="text-xs text-slate-500">AI 自动分析目的地、天数、偏好，基于美团数据规划完美旅程</p>
+            <p class="text-xs text-slate-500">AI 自动分析目的地、天数、偏好，基于飞猪数据规划完美旅程</p>
           </div>
           <div class="flex flex-wrap gap-1.5 justify-center mt-1">
             <button
