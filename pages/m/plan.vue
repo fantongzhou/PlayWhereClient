@@ -107,6 +107,12 @@ function newChat() {
                 </div>
               </div>
             </div>
+            <!-- 思考状态行 -->
+            <div v-if="msg.statusLine" class="mb-1.5 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-600 font-medium flex items-center gap-1.5 animate-pulse">
+              <span>🔍</span>
+              <span>{{ msg.statusLine }}</span>
+            </div>
+
             <div class="ai-content text-sm leading-relaxed text-slate-700" :class="{ streaming: msg.streaming }" v-html="renderMarkdown(msg.content)" />
             <span v-if="msg.streaming" class="typing-cursor inline-block w-0.5 h-4 bg-blue-600 ml-0.5 align-text-bottom rounded-sm animate-cursor-blink" />
           </div>
@@ -214,7 +220,7 @@ function newChat() {
 /* 步骤类型标识 */
 .step-action .step-dot { background: #f59e0b; }
 .step-observation .step-dot { background: #10b981; }
-.step-plan_partial .step-dot { background: #3b82f6; }
+.step-status .step-dot { background: #3b82f6; }
 .ai-content.streaming { display: inline; }
 
 /* Drawer 过渡动画 */

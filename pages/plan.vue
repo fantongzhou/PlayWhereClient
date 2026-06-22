@@ -110,6 +110,12 @@ const {
                 </div>
               </div>
 
+              <!-- 思考状态行（工具调用时动态切换） -->
+              <div v-if="msg.statusLine" class="mb-2 px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-600 font-medium flex items-center gap-2 animate-pulse">
+                <span class="text-base">🔍</span>
+                <span>{{ msg.statusLine }}</span>
+              </div>
+
               <!-- AI 文本内容 -->
               <div class="ai-content text-sm leading-relaxed text-slate-700" :class="{ streaming: msg.streaming }" v-html="renderMarkdown(msg.content)" />
               <span v-if="msg.streaming" class="typing-cursor inline-block w-0.5 h-4 bg-blue-600 ml-0.5 align-text-bottom rounded-sm animate-cursor-blink" />
@@ -181,7 +187,7 @@ const {
 /* 深度思考步骤类型标识 */
 .step-action .step-dot { background: #f59e0b; }
 .step-observation .step-dot { background: #10b981; }
-.step-plan_partial .step-dot { background: #3b82f6; }
+.step-status .step-dot { background: #3b82f6; }
 
 /* 打字光标 */
 .ai-content.streaming { display: inline; }

@@ -51,11 +51,14 @@ export interface TripPlan {
 
 // ---- SSE 事件 ----
 export type SSEEventType =
-  | 'start' | 'thought' | 'response' | 'action' | 'observation'
-  | 'plan_partial' | 'plan_complete' | 'error';
+  | 'start' | 'thought' | 'status' | 'response' | 'action' | 'observation'
+  | 'complete' | 'error';
+
+/** ReAct 循环中会推入 msg.steps 的步骤类型 */
+export type ThinkingStepType = 'action' | 'observation' | 'status';
 
 export interface ThinkingStep {
-  type: SSEEventType;
+  type: ThinkingStepType;
   step: number;
   content?: string;
   tool?: string;

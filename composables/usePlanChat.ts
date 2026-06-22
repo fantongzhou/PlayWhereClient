@@ -132,7 +132,7 @@ export function usePlanChat() {
     for (let i = 0; i < data.length; i++) {
       const rowClass = i % 2 === 0 ? '' : ' class="md-tr-alt"';
       t += `<tr${rowClass}>`;
-      for (let c = 0; c < hdr.length; c++) t += `<td>${data[i][c] || ''}</td>`;
+      for (let c = 0; c < hdr.length; c++) t += `<td>${(data[i][c] || '').replace(/%%BR%%/g, '<br>')}</td>`;
       t += '</tr>';
     }
     t += '</tbody></table>';
@@ -147,7 +147,7 @@ export function usePlanChat() {
         if (step.tool === 'get_route') return '正在规划交通路线...';
         return step.tool ? `调用 ${step.tool}` : '工具调用';
       case 'observation': return '已获取数据，正在分析...';
-      case 'plan_partial': return step.data?.day ? `第 ${step.data.day} 天行程已生成` : '生成行程中...';
+      case 'status': return step.content || '处理中...';
       default: return '';
     }
   }
@@ -155,7 +155,7 @@ export function usePlanChat() {
   function getStepMeta(step: ThinkingStep): string {
     if (step.type === 'action' && step.args?.city) return `城市: ${step.args.city}`;
     if (step.type === 'observation') return '';
-    if (step.type === 'plan_partial' && step.data?.date) return step.data.date;
+    if (step.type === 'status') return '';
     return '';
   }
 

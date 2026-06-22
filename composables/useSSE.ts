@@ -8,12 +8,24 @@ export interface Message {
   content: string;
   thinkingContent: string;
   steps: ThinkingStep[];
+  /** 思考阶段可见的状态行（工具调用时动态切换） */
+  statusLine: string;
   streaming: boolean;
   timestamp: number;
 }
 
 let msgCounter = 0;
 function uid() { return `msg_${Date.now()}_${msgCounter++}_${Math.random().toString(36).slice(2, 6)}`; }
+
+/** 工具名 → 人类可读的进行时描述（展示在思考面板标题栏） */
+function toolLabel(tool: string): string {
+  const map: Record<string, string> = {
+    get_weather: '正在查询目的地天气...',
+    search_meituan_travel: '正在搜索美团旅行数据...',
+    get_route: '正在规划交通路线...',
+  };
+  return map[tool] || `正在调用 ${tool}...`;
+}
 
 function getOrCreateSessionId(): string {
   const stored = localStorage.getItem('plan_session_id');
@@ -59,7 +71,7 @@ export function useSSE() {
     const assistantId = uid();
     messages.value.push({
       id: assistantId, role: 'assistant', content: '',
-      thinkingContent: '', steps: [], streaming: true, timestamp: Date.now(),
+      thinkingContent: '', steps: [], statusLine: '', streaming: true, timestamp: Date.now(),
     });
 
     const sessionId = getOrCreateSessionId();
@@ -123,24 +135,28 @@ export function useSSE() {
             switch (event.type) {
               case 'start':
                 if (event.data?.sessionId) localStorage.setItem('plan_session_id', event.data.sessionId);
-                if (event.message) { contentBuffer += event.message; scheduleFlush(); }
+                if (event.message) { msg.statusLine = event.message; }
                 break;
               case 'thought':
                 if (event.content) { thinkingBuffer += event.content; scheduleFlush(); }
+                break;
+              case 'status':
+                if (event.content) { thinkingBuffer += event.content; scheduleFlush(); }
+                msg.steps.push({ type: 'status', step: event.step || 0, content: event.content });
                 break;
               case 'response':
                 if (event.content) { contentBuffer += event.content; scheduleFlush(); }
                 break;
               case 'action':
+                msg.statusLine = toolLabel(event.tool || 'unknown');
                 msg.steps.push({ type: 'action', step: event.step || 0, tool: event.tool, args: event.args });
                 break;
               case 'observation':
+                msg.statusLine = '正在分析数据...';
                 msg.steps.push({ type: 'observation', step: event.step || 0, data: event.data });
                 break;
-              case 'plan_partial':
-                msg.steps.push({ type: 'plan_partial', step: event.step || 0, data: event.data });
-                break;
-              case 'plan_complete':
+              case 'complete':
+                msg.statusLine = '';
                 msg.streaming = false;
                 if (event.plan && event.plan.days?.length > 0) {
                   tripStore.setPlan(event.plan);
@@ -151,6 +167,7 @@ export function useSSE() {
                 break;
               case 'error':
                 flushAll();
+                msg.statusLine = '';
                 error.value = event.message;
                 msg.content += `\n\n⚠️ ${event.message}`;
                 msg.streaming = false;
@@ -203,7 +220,7 @@ function buildPlanSummary(plan: any): string {
     const date = (day.date || '').slice(5);
     const w = day.weather;
     const weatherStr = w ? `${weatherIcon(w.condition)} ${w.condition} ${w.temperature?.low}~${w.temperature?.high}°` : '-';
-    const attractions = (day.activities || []).filter((a: any) => a.type === 'attraction').map((a: any) => a.name).join('<br>');
+    const attractions = (day.activities || []).filter((a: any) => a.type === 'attraction').map((a: any) => a.name).join('%%BR%%') || '-';
     const lunch = (day.activities || []).filter((a: any) => a.type === 'restaurant').map((a: any) => a.name).slice(0, 1).join('') || '-';
     const dinner = (day.activities || []).filter((a: any) => a.type === 'restaurant').map((a: any) => a.name).slice(1, 2).join('') || '-';
     const hotel = day.hotel?.name || '-';
