@@ -1,393 +1,202 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue';
-import { useTripStore } from '../stores/trip';
-import { useSSE } from '../composables/useSSE';
-import type { ThinkingStep } from '../types';
-
-definePageMeta({ layout: false });
-
-const tripStore = useTripStore();
-const { messages, isStreaming, error, sendMessage, stopGeneration, clearMessages } = useSSE();
-
-const inputText = ref('');
-const chatBodyRef = ref<HTMLDivElement>();
-const showSteps = ref<Record<string, boolean>>({});
-const hasPlan = computed(() => !!tripStore.plan && tripStore.plan.days.length > 0);
-
-// 快捷提示
-const quickPrompts = [
-  '周末两天适合去哪里玩？',
-  '帮我规划北京3日游，喜欢历史文化，预算中等',
-  '三亚4天海滨度假，预算不限',
-  '成都美食之旅，3天，预算实惠',
+// Landing page - no script logic needed for static content
+const features = [
+  {
+    icon: '💬',
+    title: '自然语言对话',
+    desc: '像和朋友聊天一样描述旅行需求，AI 自动理解您的偏好、天数、预算，无需复杂表单。',
+  },
+  {
+    icon: '⚡',
+    title: '秒级行程生成',
+    desc: '基于大模型实时推理，从城市、景点、酒店到交通路线，数秒内生成完整可执行的旅行计划。',
+  },
+  {
+    icon: '🎯',
+    title: '美团真实数据',
+    desc: '景点、餐厅、酒店均来自美团酒旅真实数据，价格透明，支持一键预订。',
+  },
+  {
+    icon: '🌤️',
+    title: '实时天气集成',
+    desc: '自动查询目的地天气，根据天气状况智能调整行程建议，雨天推荐室内景点。',
+  },
+  {
+    icon: '🗺️',
+    title: '高德地图导航',
+    desc: '多模式路线规划（驾车/步行/骑行/公交），地图可视化展示每日行程轨迹。',
+  },
+  {
+    icon: '📱',
+    title: '多端随时访问',
+    desc: '响应式设计，PC 端规划、手机端查看，行程链接一键分享给同行伙伴。',
+  },
 ];
 
-// 自动滚动
-watch(
-  () => [messages.value.length, messages.value.map(m => m.content).join('')],
-  async () => { await nextTick(); scrollToBottom(); },
-);
-
-function scrollToBottom() {
-  if (chatBodyRef.value) {
-    chatBodyRef.value.scrollTop = chatBodyRef.value.scrollHeight;
-  }
-}
-
-function handleSend() {
-  const text = inputText.value;
-  if (!text.trim() || isStreaming.value) return;
-  inputText.value = '';
-  sendMessage(text);
-}
-
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    handleSend();
-  }
-}
-
-function handleQuickPrompt(prompt: string) {
-  inputText.value = prompt;
-  handleSend();
-}
-
-function handleNewChat() {
-  clearMessages();
-  localStorage.removeItem('plan_session_id');
-}
-
-function toggleSteps(msgId: string) {
-  showSteps.value[msgId] = !showSteps.value[msgId];
-}
-
-// ---- Markdown 渲染 ----
-function renderMarkdown(text: string): string {
-  if (!text) return '';
-  let html = text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-  // 1. 图片 ![](url)
-  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) =>
-    `<img src="${url.replace(/"/g, '&quot;')}" alt="${alt || '图片'}" loading="lazy" class="md-image" onerror="this.style.display='none'" />`);
-
-  // 2. 裸图片 URL
-  html = html.replace(/(?<!src=")(https?:\/\/[^\s<>"']+\.(?:jpg|jpeg|png|webp)(?:\?[^\s<>"']*)?)/gi,
-    (_, url) => `<img src="${url}" alt="图片" loading="lazy" class="md-image" onerror="this.style.display='none'" />`);
-
-  // 3. 链接 [text](url)
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="md-link">$1</a>');
-
-  // 4. 裸 URL → 链接
-  html = html.replace(/(?<![">])(?<!href=")(?<!src=")(https?:\/\/[^\s<>"'\n]+)/g, (match) => {
-    if (/\.(jpg|jpeg|png|webp)/i.test(match)) return match;
-    const d = match.length > 60 ? match.slice(0, 57) + '...' : match;
-    return `<a href="${match}" target="_blank" rel="noopener" class="md-link">${d}</a>`;
-  });
-
-  // 5. 粗体 **text**
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-  // 6. 行内代码 `code`
-  html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-
-  // 7. 表格
-  html = renderTables(html);
-
-  // 8. 段落
-  html = html.split(/\n\n+/).map(para => {
-    const t = para.trim();
-    if (!t) return '';
-    if (t.startsWith('<img') || t.startsWith('<table')) return t;
-    return `<p class="md-paragraph">${t.replace(/\n/g, '<br>')}</p>`;
-  }).join('');
-
-  return html;
-}
-
-function renderTables(html: string): string {
-  const lines = html.split('\n');
-  const result: string[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (line.trim().startsWith('|') && line.includes('|')) {
-      const rows: string[] = [line];
-      let j = i + 1;
-      while (j < lines.length && lines[j].trim().startsWith('|') && lines[j].includes('|')) { rows.push(lines[j]); j++; }
-      if (rows.length >= 2) {
-        const tbl = buildTable(rows);
-        if (tbl) { result.push(tbl); i = j; continue; }
-      }
-    }
-    result.push(line); i++;
-  }
-  return result.join('\n');
-}
-
-function buildTable(rows: string[]): string | null {
-  if (rows.length < 2) return null;
-  const parse = (r: string) => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
-  const isSep = (r: string) => /^\|[\s\-:]+\|[\s\-:|]*\|?$/.test(r);
-  const hdr = parse(rows[0]);
-  let start = isSep(rows[1]) ? 2 : 1;
-  const data = rows.slice(start).map(parse);
-  if (!data.length) return null;
-  let t = '<table class="md-table"><thead><tr>';
-  for (const c of hdr) t += `<th>${c}</th>`;
-  t += '</tr></thead><tbody>';
-  for (const r of data) {
-    t += '<tr>';
-    for (let c = 0; c < hdr.length; c++) t += `<td>${r[c] || ''}</td>`;
-    t += '</tr>';
-  }
-  t += '</tbody></table>';
-  return t;
-}
-
-function getStepLabel(step: ThinkingStep): string {
-  switch (step.type) {
-    case 'action':
-      if (step.tool === 'get_weather') return '正在查询目的地天气...';
-      if (step.tool === 'search_meituan_travel') return '正在搜索美团旅行数据...';
-      if (step.tool === 'get_route') return '正在规划交通路线...';
-      return step.tool ? `调用 ${step.tool}` : '工具调用';
-    case 'observation': return '已获取数据，正在分析...';
-    case 'plan_partial': return step.data?.day ? `第 ${step.data.day} 天行程已生成` : '生成行程中...';
-    default: return '';
-  }
-}
-function getStepMeta(step: ThinkingStep): string {
-  if (step.type === 'action' && step.args?.city) return `城市: ${step.args.city}`;
-  if (step.type === 'observation') return '';
-  if (step.type === 'plan_partial' && step.data?.date) return step.data.date;
-  return '';
-}
-function formatJSON(obj: any): string {
-  try { return JSON.stringify(obj, null, 2); } catch { return String(obj); }
-}
-
-// 路线规划由 TravelMap 组件内通过高德 Driving API 直接完成
+const steps = [
+  { step: '01', title: '描述您的旅行需求', desc: '用自然语言告诉AI：目的地、天数、偏好、预算——就像跟旅行顾问聊天一样简单。' },
+  { step: '02', title: 'AI 智能分析与规划', desc: 'DeepSeek 大模型自动分析需求，结合美团真实数据和高德地图，秒级生成个性化行程。' },
+  { step: '03', title: '查看与调整行程', desc: '地图上可视化查看完整路线，自由切换交通方式，调整景点顺序——一切尽在掌控。' },
+  { step: '04', title: '一键预订出发', desc: '确认行程后，直接通过美团链接预订酒店和门票，开启完美旅程。' },
+];
 </script>
 
 <template>
-  <div class="h-screen flex overflow-hidden">
-    <!-- 聊天区域 -->
-    <div class="chat-area flex-1 flex flex-col min-w-0 transition-[flex] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] bg-bg" :class="{ shrunk: hasPlan }">
-      <!-- 头部 -->
-      <header class="flex items-center justify-between px-5 py-3 border-b border-border bg-bg-card shrink-0">
-        <div class="flex flex-col gap-0.5">
-          <h1 class="text-[17px] font-bold m-0 text-text-primary">🤖 AI 旅行规划</h1>
-          <span class="text-[11px] text-text-secondary">基于美团酒旅真实数据 · 高德天气 · 实时对话</span>
+  <div class="min-h-screen bg-white font-sans">
+    <!-- ==================== Nav ==================== -->
+    <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+      <nav class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center text-white font-bold text-sm">S</div>
+          <span class="text-lg font-semibold text-slate-900 tracking-tight">Stitch AI</span>
         </div>
-        <button class="px-3.5 py-1.5 border border-border rounded-lg bg-bg-panel text-[13px] cursor-pointer text-text-secondary transition-all duration-150 hover:border-primary hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed" @click="handleNewChat" :disabled="isStreaming">
-          新对话
-        </button>
-      </header>
-
-      <!-- 消息列表 -->
-      <div class="flex-1 overflow-y-auto p-5 flex flex-col gap-4" ref="chatBodyRef">
-        <!-- 空状态 -->
-        <div class="flex-1 flex flex-col items-center justify-center gap-2.5 text-center px-5 py-10" v-if="messages.length === 0">
-          <div class="text-[56px]">🗺️</div>
-          <h2 class="text-xl font-bold gradient-text">用自然语言描述您的旅行需求</h2>
-          <p class="text-text-secondary text-sm max-w-[420px]">我会自动分析目的地、天数、偏好，通过美团数据为您规划完美旅程</p>
-          <div class="flex flex-wrap gap-2 mt-3 justify-center">
-            <button
-              v-for="qp in quickPrompts" :key="qp"
-              class="px-4 py-2 border border-border rounded-[20px] bg-bg-card text-[13px] cursor-pointer text-text-secondary transition-all duration-150 hover:border-primary hover:text-primary"
-              @click="handleQuickPrompt(qp)"
-            >{{ qp }}</button>
-          </div>
+        <div class="hidden md:flex items-center gap-8">
+          <a href="#features" class="text-sm text-slate-500 hover:text-slate-900 transition-colors">功能</a>
+          <a href="#how" class="text-sm text-slate-500 hover:text-slate-900 transition-colors">如何使用</a>
+          <a href="#faq" class="text-sm text-slate-500 hover:text-slate-900 transition-colors">常见问题</a>
         </div>
-
-        <!-- 消息气泡 -->
-        <div
-          v-for="msg in messages" :key="msg.id"
-          class="flex"
-          :class="msg.role === 'user' ? 'justify-end' : msg.role === 'system' ? 'justify-center' : 'justify-start'"
+        <a
+          href="/plan"
+          class="bg-indigo-700 hover:bg-indigo-800 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm"
         >
-          <!-- 用户消息 -->
-          <div v-if="msg.role === 'user'" class="max-w-[80%] px-[18px] py-2.5 rounded-[18px_18px_4px_18px] bg-gradient-to-br from-primary to-[#7c3aed] text-white text-sm leading-relaxed">
-            {{ msg.content }}
-          </div>
+          开始使用
+        </a>
+      </nav>
+    </header>
 
-          <!-- AI 消息 -->
-          <div v-else-if="msg.role === 'assistant'" class="flex gap-2.5 max-w-[92%] w-full animate-msg-fade-in">
-            <div class="w-[34px] h-[34px] rounded-full bg-bg-card flex items-center justify-center text-lg shrink-0 border border-border">🤖</div>
-            <div class="flex-1 min-w-0">
-              <!-- 深度思考（DeepSeek 风格折叠面板） -->
-              <div v-if="msg.thinkingContent || msg.steps.length > 0" class="mb-3 border border-[#e5e7eb] rounded-lg overflow-hidden bg-[#f9fafb]">
-                <button class="flex items-center gap-2 w-full px-3.5 py-2.5 border-0 bg-transparent text-[13px] cursor-pointer text-[#6b7280] transition-colors duration-150 hover:bg-[#f3f4f6]" @click="toggleSteps(msg.id)">
-                  <span class="text-[15px]">{{ msg.streaming ? '🧠' : '✅' }}</span>
-                  <span class="font-medium flex-1 text-left">
-                    {{ msg.streaming ? '深度思考中...' : `已完成深度思考 (${msg.steps.length} 步)` }}
-                  </span>
-                  <span class="text-[11px] text-[#9ca3af] transition-transform duration-200">{{ showSteps[msg.id] ? '▾' : '▸' }}</span>
-                </button>
-                <div class="think-body" :class="{ expanded: showSteps[msg.id] }">
-                  <!-- 思考文本内容 -->
-                  <div v-if="msg.thinkingContent" class="px-3.5 py-2.5 text-[13px] leading-relaxed text-[#4b5563] whitespace-pre-wrap border-b border-[#f3f4f6]">{{ msg.thinkingContent }}</div>
-                  <!-- 工具步骤 -->
-                  <div
-                    v-for="(step, si) in msg.steps" :key="si"
-                    :class="['flex items-center gap-2 px-3.5 py-1.5 pl-6 text-xs text-[#6b7280] border-t border-[#f3f4f6] relative first:border-t-0', `step-${step.type}`]"
-                  >
-                    <span class="step-dot w-1.5 h-1.5 rounded-full bg-[#d1d5db] shrink-0" />
-                    <span class="flex-1">{{ getStepLabel(step) }}</span>
-                    <span class="text-[11px] text-[#9ca3af]">{{ getStepMeta(step) }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- AI 内容 -->
-              <div class="ai-content text-sm leading-relaxed text-text-primary" :class="{ streaming: msg.streaming }" v-html="renderMarkdown(msg.content)" />
-              <span v-if="msg.streaming" class="typing-cursor inline-block w-0.5 h-[18px] bg-primary ml-0.5 align-text-bottom rounded-sm animate-cursor-blink" />
-            </div>
-          </div>
-
-          <!-- 系统消息 -->
-          <div v-else-if="msg.role === 'system'" class="px-4 py-2 rounded-lg bg-[#fefce8] text-[#a16207] text-xs max-w-[80%]">
-            {{ msg.content }}
-          </div>
+    <!-- ==================== Hero ==================== -->
+    <section class="relative overflow-hidden bg-gradient-to-b from-white via-white to-slate-50/50">
+      <div class="max-w-4xl mx-auto px-6 pt-24 pb-12 text-center relative z-10">
+        <!-- Badge -->
+        <div class="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full text-sm text-indigo-700 font-medium mb-8">
+          <span class="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+          现已支持 DeepSeek 大模型
         </div>
 
-        <!-- 错误提示 -->
-        <div v-if="error" class="px-4 py-2.5 bg-[#fef2f2] text-[#dc2626] rounded-lg text-[13px]">⚠️ {{ error }}</div>
+        <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 leading-tight tracking-tight">
+          用 AI 重新定义<br/>
+          <span class="text-indigo-700">旅行规划</span>的方式
+        </h1>
+        <p class="mt-6 text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
+          只需用自然语言描述需求，AI 自动分析目的地、天数、偏好和预算，
+          基于美团真实数据和高德地图，秒级生成完整旅行计划。
+        </p>
+
+        <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a
+            href="/plan"
+            class="w-full sm:w-auto bg-indigo-700 hover:bg-indigo-800 text-white px-8 py-3.5 rounded-xl text-base font-semibold transition-all shadow-lg shadow-indigo-200 hover:shadow-xl hover:shadow-indigo-300 hover:-translate-y-0.5"
+          >
+            免费开始规划 →
+          </a>
+          <a
+            href="#features"
+            class="w-full sm:w-auto bg-white hover:bg-slate-50 border border-gray-200 text-slate-700 px-8 py-3.5 rounded-xl text-base font-medium transition-all"
+          >
+            了解更多
+          </a>
+        </div>
+
+        <p class="mt-6 text-xs text-slate-400">
+          无需注册 · 完全免费 · 基于真实数据
+        </p>
       </div>
 
-      <!-- 输入框 -->
-      <footer class="px-5 py-3 border-t border-border bg-bg-card shrink-0">
-        <div class="flex gap-2 items-end">
-          <textarea
-            v-model="inputText"
-            class="flex-1 px-3.5 py-2.5 border border-border rounded-xl text-sm font-[inherit] leading-relaxed resize-none outline-none bg-bg-panel text-text-primary min-h-[44px] max-h-[120px] transition-[border-color] duration-200 focus:border-primary focus:shadow-[0_0_0_3px_rgba(37,99,235,0.1)] disabled:opacity-60"
-            placeholder="输入您的旅行需求，Enter 发送，Shift+Enter 换行..."
-            :disabled="isStreaming"
-            rows="2"
-            @keydown="handleKeydown"
-          />
-          <!-- 流式输出中 → 显示打断按钮 -->
-          <button
-            v-if="isStreaming"
-            class="px-[22px] py-2.5 border-0 rounded-lg bg-gradient-to-br from-[#ef4444] to-[#dc2626] text-white text-sm font-semibold cursor-pointer transition-all duration-200 shrink-0 animate-pulse-stop hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(239,68,68,0.3)]"
-            @click="stopGeneration"
-          >
-            ⏹ 停止
-          </button>
-          <!-- 空闲 → 显示发送按钮 -->
-          <button
-            v-else
-            class="px-[22px] py-2.5 border-0 rounded-lg bg-gradient-to-br from-primary to-[#7c3aed] text-white text-sm font-semibold cursor-pointer transition-all duration-200 shrink-0 hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(37,99,235,0.3)] disabled:opacity-60 disabled:cursor-not-allowed"
-            @click="handleSend"
-            :disabled="!inputText.trim()"
-          >
-            发送
-          </button>
+      <!-- Decorative subtle gradient blob -->
+      <div class="absolute -top-40 -right-40 w-96 h-96 bg-indigo-100/40 rounded-full blur-3xl pointer-events-none" />
+      <div class="absolute -bottom-20 -left-20 w-72 h-72 bg-blue-100/30 rounded-full blur-3xl pointer-events-none" />
+    </section>
+
+    <!-- ==================== Features ==================== -->
+    <section id="features" class="py-24 bg-white">
+      <div class="max-w-6xl mx-auto px-6">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl font-bold text-slate-900 tracking-tight">为什么选择 Stitch AI</h2>
+          <p class="mt-3 text-slate-500 max-w-xl mx-auto">不只是行程规划——而是从灵感到出发的一站式旅行助手</p>
         </div>
-        <div class="text-[11px] text-text-secondary opacity-50 mt-1.5">Agent 会自动分析城市、天数、偏好 · 信息不足时会追问</div>
-      </footer>
-    </div>
 
-    <!-- 地图区域（规划完成后滑出） -->
-    <div class="map-area flex-[0_0_0] overflow-hidden border-l border-border bg-bg-card transition-[flex] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]" :class="{ visible: hasPlan }">
-      <ClientOnly fallback-tag="div" fallback="地图加载中...">
-        <TravelMap />
-      </ClientOnly>
-    </div>
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div
+            v-for="(feat, i) in features"
+            :key="i"
+            class="group p-6 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200 transition-all duration-300"
+          >
+            <div class="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-2xl mb-5 group-hover:bg-indigo-50 transition-colors">
+              {{ feat.icon }}
+            </div>
+            <h3 class="text-base font-semibold text-slate-900 mb-2">{{ feat.title }}</h3>
+            <p class="text-sm text-slate-500 leading-relaxed">{{ feat.desc }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-    <!-- 时间线区域（规划完成后滑出） -->
-    <div class="timeline-area flex-[0_0_0] overflow-y-auto border-l border-border bg-bg-card transition-[flex] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]" :class="{ visible: hasPlan }">
-      <TimelinePanel />
-    </div>
+    <!-- ==================== How It Works ==================== -->
+    <section id="how" class="py-24 bg-slate-50/80">
+      <div class="max-w-4xl mx-auto px-6">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl font-bold text-slate-900 tracking-tight">三步开启完美旅程</h2>
+          <p class="mt-3 text-slate-500">像聊天一样简单，全程无需手动填写复杂信息</p>
+        </div>
+
+        <div class="space-y-8">
+          <div
+            v-for="(item, i) in steps"
+            :key="i"
+            class="flex flex-col md:flex-row gap-6 items-start group"
+          >
+            <!-- Step number -->
+            <div class="shrink-0 w-16 h-16 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center justify-center text-xl font-bold text-indigo-600 group-hover:bg-indigo-50 group-hover:border-indigo-200 transition-all">
+              {{ item.step }}
+            </div>
+            <!-- Content -->
+            <div class="flex-1 pt-1">
+              <h3 class="text-lg font-semibold text-slate-900">{{ item.title }}</h3>
+              <p class="mt-2 text-slate-500 leading-relaxed">{{ item.desc }}</p>
+            </div>
+            <!-- Connector line (not on last item) -->
+            <div v-if="i < steps.length - 1" class="hidden md:block absolute left-8 w-px h-8 bg-gray-200" style="margin-top:64px;margin-left:31px" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== CTA Banner ==================== -->
+    <section class="py-24 bg-white">
+      <div class="max-w-3xl mx-auto px-6 text-center">
+        <div class="bg-gradient-to-br from-indigo-700 via-indigo-600 to-blue-700 rounded-3xl p-12 md:p-16 shadow-xl shadow-indigo-200/50">
+          <h2 class="text-2xl md:text-3xl font-bold text-white tracking-tight">
+            准备好规划您的下一次旅行了吗？
+          </h2>
+          <p class="mt-4 text-indigo-100 text-base max-w-md mx-auto">
+            无需注册，直接开始对话。AI 会在几秒内为您生成专属旅行方案。
+          </p>
+          <a
+            href="/plan"
+            class="mt-8 inline-block bg-white hover:bg-indigo-50 text-indigo-700 px-8 py-3.5 rounded-xl text-base font-semibold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+          >
+            立即免费体验 →
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== Footer ==================== -->
+    <footer class="border-t border-gray-100 bg-white">
+      <div class="max-w-6xl mx-auto px-6 py-12 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 bg-indigo-700 rounded flex items-center justify-center text-white font-bold text-xs">S</div>
+          <span class="text-sm font-medium text-slate-600">Stitch AI Travel</span>
+        </div>
+        <div class="flex items-center gap-6">
+          <a href="#" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">关于我们</a>
+          <a href="#" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">隐私政策</a>
+          <a href="#" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">使用条款</a>
+        </div>
+        <p class="text-xs text-slate-400">
+          © 2024 Stitch AI. Powered by DeepSeek · 高德地图 · 美团
+        </p>
+      </div>
+    </footer>
   </div>
 </template>
-
-<style scoped>
-/* 三列布局面板滑出过渡（flex-basis calc 无法用 Tailwind 表达） */
-.chat-area.shrunk {
-  flex: 0 0 calc(100% * 2 / 7);
-}
-.map-area.visible {
-  flex: 0 0 calc(100% * 3 / 7);
-}
-.timeline-area.visible {
-  flex: 0 0 calc(100% * 2 / 7);
-}
-
-/* 思考面板折叠过渡 */
-.think-body {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease;
-}
-.think-body.expanded {
-  max-height: 600px;
-  overflow-y: auto;
-}
-
-/* 深度思考步骤类型标识 */
-.step-action .step-dot {
-  background: #f59e0b;
-}
-.step-observation .step-dot {
-  background: #10b981;
-}
-.step-plan_partial .step-dot {
-  background: #3b82f6;
-}
-
-/* 欢迎标题渐变色文字 */
-.gradient-text {
-  background: linear-gradient(135deg, #2563eb, #8b5cf6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* 打字光标 */
-.ai-content.streaming {
-  display: inline;
-}
-
-/* v-html 渲染内联代码 */
-.ai-content :deep(.inline-code) {
-  background: #f1f5f9;
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-/* v-html 渲染的 markdown 内容 */
-.ai-content :deep(.md-image) {
-  max-width: 100%;
-  max-height: 300px;
-  border-radius: 8px;
-  margin: 6px 0;
-  display: block;
-}
-.ai-content :deep(.md-link) {
-  color: #2563eb;
-  text-decoration: underline;
-}
-.ai-content :deep(.md-table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0;
-  font-size: 13px;
-}
-.ai-content :deep(.md-table th),
-.ai-content :deep(.md-table td) {
-  border: 1px solid #e2e8f0;
-  padding: 6px 10px;
-  text-align: left;
-}
-.ai-content :deep(.md-table th) {
-  background: #f1f5f9;
-  font-weight: 600;
-}
-.ai-content :deep(.md-paragraph) {
-  margin: 4px 0;
-}
-</style>

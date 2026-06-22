@@ -18,7 +18,7 @@ interface RouteSegment {
   path: [number, number][];  // 路线坐标
 }
 
-// 高德 v5 驾车路径规划 REST API 响应结构
+// 高德 v5 打车路径规划 REST API 响应结构
 interface AmapRouteStep {
   polyline: string;  // "lng,lat;lng,lat;..."
 }

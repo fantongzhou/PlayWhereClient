@@ -3,38 +3,45 @@ import { useTripStore } from '../stores/trip';
 import DayCard from './DayCard.vue';
 
 const tripStore = useTripStore();
+
+function getWeatherIcon(condition: string): string {
+  if (!condition) return '🌤️';
+  if (condition.includes('晴')) return '☀️';
+  if (condition.includes('多云')) return '⛅';
+  if (condition.includes('阴')) return '☁️';
+  if (condition.includes('雨')) return '🌧️';
+  if (condition.includes('雪')) return '❄️';
+  return '🌤️';
+}
 </script>
 
 <template>
-  <div class="flex-1 overflow-y-auto px-5 pb-5">
-    <div class="py-4">
-      <h3 class="text-base font-semibold flex items-center gap-2">
-        <span class="text-[20px]">📋</span>
-        {{ tripStore.plan?.city }} {{ tripStore.plan?.days.length }}日行程
-      </h3>
+  <div class="flex flex-col h-full" v-if="tripStore.plan">
+    <!-- 头部 -->
+    <div class="px-4 py-3 border-b border-gray-100 shrink-0">
+      <h2 class="text-base font-bold text-slate-900">
+        Your Itinerary: {{ tripStore.plan.city }}
+      </h2>
+      <p class="text-xs text-slate-500 mt-0.5">{{ tripStore.plan.days.length }} 天行程 · {{ tripStore.plan.totalBudget }}</p>
     </div>
 
-    <!-- 日期切换 tabs -->
-    <div class="flex gap-1.5 mb-4 flex-wrap">
+    <!-- 日期切换 pills -->
+    <div class="flex gap-1.5 px-4 py-2.5 overflow-x-auto border-b border-gray-100 shrink-0">
       <button
-        v-for="day in tripStore.plan?.days"
+        v-for="day in tripStore.plan.days"
         :key="day.day"
-        class="px-4 py-2 border border-border rounded-lg text-[13px] font-medium cursor-pointer bg-bg-card text-text-secondary transition-all duration-150 flex items-center gap-1.5"
-        :class="{ '!bg-primary !text-white !border-primary': tripStore.activeDay === day.day }"
+        class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+        :class="tripStore.activeDay === day.day
+          ? 'bg-blue-600 text-white'
+          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'"
         @click="tripStore.activeDay = day.day"
       >
-        Day {{ day.day }}
-        <span class="text-sm">
-          {{ day.weather?.condition === '晴' ? '☀️' :
-             day.weather?.condition === '多云' ? '⛅' :
-             day.weather?.condition === '阴' ? '☁️' :
-             day.weather?.condition === '小雨' ? '🌧️' : '🌤️' }}
-        </span>
+        Day {{ day.day }} {{ getWeatherIcon(day.weather?.condition || '') }}
       </button>
     </div>
 
-    <!-- 当前天的详细行程 -->
-    <div class="min-h-[200px]" v-if="tripStore.plan?.days">
+    <!-- 行程内容（可滚动） -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
       <DayCard
         v-for="day in tripStore.plan.days.filter(d => d.day === tripStore.activeDay)"
         :key="day.day"
@@ -42,20 +49,14 @@ const tripStore = useTripStore();
       />
     </div>
 
-    <!-- 预算与提示 -->
-    <div class="mt-5 pt-4 border-t border-border" v-if="tripStore.plan">
-      <div class="px-4 py-3 bg-gradient-to-br from-[#ecfdf5] to-[#d1fae5] rounded-lg text-[13px] text-[#065f46] flex items-center gap-2 mb-3">
-        <span class="text-base">💵</span>
-        <span>{{ tripStore.plan.totalBudget }}</span>
-      </div>
-      <div class="px-4 py-3 bg-bg-panel rounded-lg" v-if="tripStore.plan.tips.length > 0">
-        <div class="text-[13px] font-semibold mb-2">💡 旅行贴士</div>
-        <ul class="list-none p-0">
-          <li v-for="(tip, i) in tripStore.plan.tips" :key="i" class="tip-item text-xs text-text-secondary py-1 pl-4 relative">
-            {{ tip }}
-          </li>
-        </ul>
-      </div>
+    <!-- 底部：旅行贴士 -->
+    <div v-if="tripStore.plan.tips.length > 0" class="px-4 py-3 border-t border-gray-100 shrink-0 space-y-2">
+      <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider">💡 旅行贴士</h4>
+      <ul class="space-y-1.5">
+        <li v-for="(tip, i) in tripStore.plan.tips" :key="i" class="tip-item text-xs text-slate-500 pl-4 relative">
+          {{ tip }}
+        </li>
+      </ul>
     </div>
   </div>
 </template>

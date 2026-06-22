@@ -13,31 +13,9 @@ const API = {
 export const TRANSPORT_META: Record<TransportMode, { label: string; icon: string; color: string }> = {
   walking:    { label: '步行',   icon: '🚶', color: '#10b981' },
   bicycling:  { label: '骑行',   icon: '🚲', color: '#06b6d4' },
-  driving:    { label: '驾车',   icon: '🚗', color: '#6366f1' },
+  driving:    { label: '打车',   icon: '🚗', color: '#6366f1' },
   transit:    { label: '公交',   icon: '🚌', color: '#f59e0b' },
 };
-
-// ==================== 费用估算 ====================
-function estimatePrice(mode: TransportMode, distanceMeters: number): number {
-  switch (mode) {
-    case 'walking':
-      return 0;
-    case 'bicycling':
-      return distanceMeters > 3000 ? 3 : 0; // 共享单车 >3km 收费约3元
-    case 'driving': {
-      const km = distanceMeters / 1000;
-      // 油耗 + 可能的过路费，简单估算 1.5元/km
-      return Math.round(km * 1.5);
-    }
-    case 'transit': {
-      const km = distanceMeters / 1000;
-      if (km <= 5) return 2;
-      if (km <= 10) return 4;
-      if (km <= 20) return 6;
-      return 8;
-    }
-  }
-}
 
 // ==================== 自动推荐 ====================
 function recommendMode(
@@ -103,10 +81,17 @@ async function fetchAmapRoute(
 
   if (mode === 'driving') {
     params.set('strategy', '32');
-    params.set('show_fields', 'polyline');
+    params.set('show_fields', 'polyline,cost,duration');
   }
-  if (mode === 'transit' && city) {
-    params.set('city', city);
+  if (mode === 'walking') {
+    params.set('show_fields', 'polyline,cost,duration');
+  }
+  if (mode === 'bicycling') {
+    params.set('show_fields', 'polyline,cost,duration');
+  }
+  if (mode === 'transit') {
+    params.set('show_fields', 'polyline,cost,duration');
+    if (city) params.set('city', city);
   }
 
   const url = `${API[mode]}?${params.toString()}`;
@@ -120,13 +105,17 @@ async function fetchAmapRoute(
     let path: [number, number][] = [];
     let distance = 0;
     let duration = 0;
+    let price = 0;
+
+    // 从 API 响应中提取费用（只取打车费，高德字段值均为 string）
+    const extractCost = (routeObj: any): number => Number(routeObj?.taxi_cost) || 0;
 
     if (mode === 'transit') {
-      // 公交返回结构不同：data.route.transits[]
       const transit = data.route?.transits?.[0];
       if (!transit) return null;
       distance = Number(transit.distance) || 0;
-      duration = Number(transit.duration) || 0;
+      duration = Number(transit.cost?.duration) || Number(transit.duration) || 0;
+      price = extractCost(data.route);
       // 合并各段 polyline
       for (const seg of transit.segments || []) {
         if (seg.walking?.polyline) path.push(...parsePolyline(seg.walking.polyline));
@@ -137,7 +126,8 @@ async function fetchAmapRoute(
       const route = data.route?.paths?.[0];
       if (!route) return null;
       distance = Number(route.distance) || 0;
-      duration = Number(route.duration) || 0;
+      duration = Number(route.cost?.duration) || Number(route.duration) || 0;
+      price = extractCost(data.route);
       for (const step of route.steps || []) {
         if (step.polyline) path.push(...parsePolyline(step.polyline));
       }
@@ -145,13 +135,7 @@ async function fetchAmapRoute(
 
     if (distance === 0) return null;
 
-    return {
-      mode,
-      distance,
-      duration,
-      price: estimatePrice(mode, distance),
-      polyline: path,
-    };
+    return { mode, distance, duration, price, polyline: path };
   } catch {
     return null;
   }
@@ -170,11 +154,11 @@ async function computeSegment(
   const destination = `${to.lng},${to.lat}`;
   const routeKey = wsKey || key;
 
-  // 先用驾车距离判断该查哪些模式
+  // 先用打车距离判断该查哪些模式
   const drivingInfo = await fetchAmapRoute('driving', origin, destination, routeKey, city);
 
   if (!drivingInfo) {
-    // 驾车不可达，尝试步行
+    // 打车不可达，尝试步行
     const walkInfo = await fetchAmapRoute('walking', origin, destination, routeKey);
     if (!walkInfo) return null;
     return {
@@ -186,17 +170,16 @@ async function computeSegment(
   }
 
   const dist = drivingInfo.distance;
-  const modes: TransportMode[] = ['driving']; // 驾车总是可用
+  const modes: TransportMode[] = ['driving'];
 
-  if (dist <= 3000) modes.push('walking');      // <3km 步行可选
-  if (dist <= 10000) modes.push('bicycling');   // <10km 骑行可选
-  if (dist >= 2000) modes.push('transit');      // >2km 公交可选
+  if (dist <= 3000) modes.push('walking');
+  if (dist <= 10000) modes.push('bicycling');
 
-  // 并行查询其他模式
+  // 并行查询步行/骑行
   const promises: Promise<RouteInfo | null>[] = [];
   const modeOrder: TransportMode[] = [];
   for (const m of modes) {
-    if (m === 'driving') continue; // 已查过
+    if (m === 'driving') continue;
     modeOrder.push(m);
     promises.push(fetchAmapRoute(m, origin, destination, routeKey, city));
   }
@@ -209,8 +192,18 @@ async function computeSegment(
     if (info) routes[modeOrder[i]] = info;
   }
 
+  // 公交不调 API，始终保留入口（点击后唤起高德地图）
+  routes.transit = {
+    mode: 'transit',
+    distance: 0,
+    duration: 0,
+    price: 0,
+    polyline: [],
+  };
+
   const availableModes = Object.keys(routes) as TransportMode[];
-  const recommended = recommendMode(dist, budget, availableModes);
+  const recommended = recommendMode(dist, budget, availableModes.filter(m => m !== 'transit'));
+  // 公交不做推荐，保持推荐结果在步行/骑行/打车中选
 
   return {
     from, to,

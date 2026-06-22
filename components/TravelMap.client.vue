@@ -7,6 +7,7 @@ const tripStore = useTripStore();
 const { computeAndStoreRoutes } = useRoutes();
 const config = useRuntimeConfig();
 const mapContainer = ref<HTMLDivElement>();
+const isMapLoading = ref(false);
 
 let map: any = null;
 let markers: any[] = [];
@@ -56,6 +57,8 @@ async function renderDayOnMap(skipCompute = false) {
   const city = tripStore.plan.city || '全国';
 
   if (!skipCompute) {
+    isMapLoading.value = true;
+
     // ---- Phase 1: 为缺少坐标的活动搜索坐标 ----
     const geocodeTasks: Promise<void>[] = [];
     for (const day of tripStore.plan.days) {
@@ -99,21 +102,26 @@ async function renderDayOnMap(skipCompute = false) {
 
     // ---- 从 tripStore 读取路线并绘制 ----
     const dayRoutes = tripStore.getRoutesForDay(day.day);
+
+    // 每段路线使用不同颜色
+    const routeColors = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
+
     for (let i = 0; i < dayRoutes.length; i++) {
       const seg = dayRoutes[i];
       const routeInfo = seg.routes[seg.selected];
       const polyline = routeInfo?.polyline;
       const fromAct = activitiesWithCoords[i];
-      // 最后一段可能是到酒店，此时 toAct 为 undefined，用酒店坐标 fallback
       const toAct = activitiesWithCoords[i + 1]
         || (day.hotel?.lat && day.hotel?.lng ? { lng: day.hotel.lng, lat: day.hotel.lat } as any : undefined);
+
+      const color = routeColors[i % routeColors.length];
 
       if (polyline && polyline.length > 0) {
         const poly = new AMap.Polyline({
           path: polyline,
-          strokeColor: '#6366f1',
-          strokeWeight: isActive ? 3 : 1.5,
-          strokeOpacity: opacity * 0.7,
+          strokeColor: color,
+          strokeWeight: isActive ? 4 : 2,
+          strokeOpacity: opacity * 0.8,
           strokeStyle: isActive ? 'solid' : 'dashed',
         });
         map.add(poly);
@@ -127,14 +135,14 @@ async function renderDayOnMap(skipCompute = false) {
         const modeLabel = seg.selected === 'walking' ? '🚶 步行'
           : seg.selected === 'bicycling' ? '🚲 骑行'
           : seg.selected === 'transit' ? '🚌 公交'
-          : '🚗 驾车';
+          : '🚗 打车';
         const labelContent = document.createElement('div');
         labelContent.innerHTML = `
-          <div style="background:white; border:1.5px solid #6366f1; border-radius:6px;
+          <div style="background:white; border:2px solid ${color}; border-radius:6px;
             padding:3px 8px; font-size:11px; color:#1e293b; white-space:nowrap;
             box-shadow:0 2px 6px rgba(0,0,0,.15); opacity:${opacity}; text-align:center;">
             <div>${modeLabel}</div>
-            <div style="font-weight:600;color:#4f46e5;">${formatDuration(durMin)}</div>
+            <div style="font-weight:600;color:${color};">${formatDuration(durMin)}</div>
             <div style="font-size:10px;color:#64748b;">${distKm}km</div>
           </div>`;
         const labelMarker = new AMap.Marker({
@@ -148,7 +156,7 @@ async function renderDayOnMap(skipCompute = false) {
         // 降级：直线
         const poly = new AMap.Polyline({
           path: [[fromAct.lng, fromAct.lat], [toAct.lng, toAct.lat]],
-          strokeColor: '#6366f1',
+          strokeColor: color,
           strokeWeight: isActive ? 2 : 1,
           strokeOpacity: opacity * 0.3,
           strokeStyle: 'dashed',
@@ -230,6 +238,8 @@ async function renderDayOnMap(skipCompute = false) {
       markers.push(hm);
     }
   }
+
+  isMapLoading.value = false;
 }
 
 // 动态加载高德 JS API（含路线规划插件）
@@ -308,8 +318,6 @@ watch(() => tripStore.plan, (plan) => {
   renderDayOnMap();
   // 用城市名定位
   map.setCity(plan.city);
-  // 面板从 width:0 过渡到 45%，需要通知地图重新计算尺寸
-  setTimeout(() => map?.resize(), 600);
   // 搜索第一个景点并飞到
   const firstActivity = plan.days[0]?.activities?.find((a: any) => a.name);
   if (firstActivity) {
@@ -355,5 +363,20 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="mapContainer" class="w-full h-full"></div>
+  <div class="w-full h-full relative">
+    <div ref="mapContainer" class="w-full h-full"></div>
+
+    <!-- Loading 蒙层 -->
+    <Transition name="fade">
+      <div
+        v-if="isMapLoading"
+        class="absolute inset-0 bg-white/70 flex items-center justify-center z-10"
+      >
+        <div class="flex flex-col items-center gap-3">
+          <div class="w-9 h-9 border-[3px] border-[#e2e8f0] border-t-primary rounded-full animate-spin" />
+          <span class="text-sm text-text-secondary font-medium">路线规划中...</span>
+        </div>
+      </div>
+    </Transition>
+  </div>
 </template>

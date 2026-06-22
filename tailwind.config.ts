@@ -8,6 +8,9 @@ export default <Config>{
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'sans-serif'],
+      },
       colors: {
         primary: '#2563eb',
         'primary-light': '#3b82f6',
@@ -22,7 +25,7 @@ export default <Config>{
         error: '#ef4444',
       },
       borderRadius: {
-        DEFAULT: '10px',
+        DEFAULT: '12px',
       },
       boxShadow: {
         DEFAULT: '0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06)',
