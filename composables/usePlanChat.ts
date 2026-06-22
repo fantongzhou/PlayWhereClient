@@ -72,7 +72,8 @@ export function usePlanChat() {
     html = html.replace(/(?:^\|.+\|$\n?)+/gm, (match) => {
       const idx = tablePlaceholders.length;
       tablePlaceholders.push(match.trim());
-      return `%%TABLE_${idx}%%`;
+      // 用双换行包裹，确保表格在段落阶段被识别为独立块
+      return `\n\n%%TABLE_${idx}%%\n\n`;
     });
 
     html = html.replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>');

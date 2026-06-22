@@ -193,12 +193,26 @@ const {
 .ai-content :deep(.md-hr) { border: none; border-top: 1px solid #e2e8f0; margin: 8px 0; }
 .ai-content :deep(.md-image) { max-width: 100%; max-height: 300px; border-radius: 8px; margin: 6px 0; display: block; }
 .ai-content :deep(.md-link) { color: #2563eb; text-decoration: underline; }
-.ai-content :deep(.md-table) { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
-.ai-content :deep(.md-table th), .ai-content :deep(.md-table td) { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
-.ai-content :deep(.md-table th) { background: #f1f5f9; font-weight: 600; color: #475569; }
-.ai-content :deep(.md-tr-alt) { background: #f8fafc; }
-.ai-content :deep(.md-paragraph) { margin: 4px 0; color: #334155; }
+.ai-content :deep(.md-table) {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  margin: 10px 0; font-size: 13px; border-radius: 8px;
+  overflow: hidden; box-shadow: 0 0 0 1px #e2e8f0;
+}
+.ai-content :deep(.md-table th) {
+  background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+  font-weight: 600; color: #1e293b; padding: 8px 12px;
+  text-align: left; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.02em; border-bottom: 2px solid #cbd5e1;
+}
+.ai-content :deep(.md-table td) {
+  padding: 7px 12px; border-bottom: 1px solid #f1f5f9; color: #475569;
+}
+.ai-content :deep(.md-table tbody tr:last-child td) { border-bottom: none; }
+.ai-content :deep(.md-table .md-tr-alt td) { background: #f8fafc; }
+.ai-content :deep(.md-tr-alt) { background: transparent; }
+.ai-content :deep(.md-paragraph) { margin: 4px 0; line-height: 1.7; font-size: 14px; color: #334155; }
 .ai-content :deep(.md-ul) { margin: 4px 0; padding-left: 20px; }
 .ai-content :deep(.md-li) { margin: 2px 0; color: #475569; font-size: 13px; }
-.ai-content :deep(.inline-code) { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 12px; color: #e11d48; }
+.ai-content :deep(.md-li)::marker { color: #2563eb; }
+.ai-content :deep(.inline-code) { background: #f1f5f9; padding: 1px 6px; border-radius: 4px; font-size: 12px; color: #e11d48; font-family: 'SF Mono','Fira Code',monospace; }
 </style>
