@@ -95,7 +95,7 @@ function newChat() {
             <div v-if="msg.thinkingContent || msg.steps.length > 0" class="mb-2 border border-gray-200 rounded-xl overflow-hidden bg-gray-50">
               <button class="flex items-center gap-1.5 w-full px-3 py-2 border-0 bg-transparent text-xs cursor-pointer text-slate-500 hover:bg-gray-100 transition-colors" @click="toggleSteps(msg.id)">
                 <span>{{ msg.streaming ? '🧠' : '✅' }}</span>
-                <span class="font-medium flex-1 text-left">{{ msg.streaming ? '思考中...' : `深度思考 (${msg.steps.length}步)` }}</span>
+                <span class="font-medium flex-1 text-left">{{ msg.streaming ? '思考中...' : '已完成深度思考' }}</span>
                 <span class="text-[10px] text-slate-400">{{ showSteps[msg.id] ? '▾' : '▸' }}</span>
               </button>
               <div class="think-body" :class="{ expanded: showSteps[msg.id] }">
