@@ -76,13 +76,6 @@ npm install && npm run dev
   └─────────────────┘
 ```
 
-## 📁 项目结构
-
-| 目录 | 说明 | 详细文档 |
-|------|------|---------|
-| [`server/`](server/) | Node.js 后端 · Express · Agent 引擎 | [server/README.md](server/README.md) |
-| [`client/`](client/) | Nuxt 3 前端 · 地图 · 时间线 | [client/README.md](client/README.md) |
-| `screenshots/` | 页面截图 | - |
 
 ## 🔄 Agent 流程
 
