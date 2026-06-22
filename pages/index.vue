@@ -1,38 +1,13 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed } from 'vue';
 import { useTripStore } from '../stores/trip';
+import { useSSE } from '../composables/useSSE';
 import type { ThinkingStep } from '../types';
 
 definePageMeta({ layout: false });
 
 const tripStore = useTripStore();
-const apiBase = useApiBase();
-
-// ---- 本地消息状态（替代 chatStore） ----
-interface Message {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  thinkingContent: string;
-  steps: ThinkingStep[];
-  streaming: boolean;
-  timestamp: number;
-}
-let msgCounter = 0;
-function uid() { return `msg_${Date.now()}_${msgCounter++}_${Math.random().toString(36).slice(2, 6)}`; }
-
-const messages = ref<Message[]>([]);
-const isStreaming = ref(false);
-const error = ref<string | null>(null);
-
-// 短期记忆：跨请求保持 sessionId
-function getOrCreateSessionId(): string {
-  const stored = localStorage.getItem('plan_session_id');
-  if (stored) return stored;
-  const newId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  localStorage.setItem('plan_session_id', newId);
-  return newId;
-}
+const { messages, isStreaming, error, sendMessage, stopGeneration, clearMessages } = useSSE();
 
 const inputText = ref('');
 const chatBodyRef = ref<HTMLDivElement>();
@@ -59,176 +34,11 @@ function scrollToBottom() {
   }
 }
 
-// ---- 打断控制器 ----
-let abortController: AbortController | null = null;
-
-function stopGeneration() {
-  if (abortController) {
-    abortController.abort();
-    abortController = null;
-  }
-}
-
-// 页面关闭时自动打断
-if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', stopGeneration);
-}
-
-async function handleSend() {
-  const text = inputText.value.trim();
-  if (!text || isStreaming.value) return;
+function handleSend() {
+  const text = inputText.value;
+  if (!text.trim() || isStreaming.value) return;
   inputText.value = '';
-  error.value = null;
-  isStreaming.value = true;
-
-  // 添加用户消息
-  messages.value.push({ id: uid(), role: 'user', content: text, thinkingContent: '', steps: [], streaming: false, timestamp: Date.now() });
-
-  // 创建助手消息占位
-  const assistantId = uid();
-  messages.value.push({ id: assistantId, role: 'assistant', content: '', thinkingContent: '', steps: [], streaming: true, timestamp: Date.now() });
-
-  const sessionId = getOrCreateSessionId();
-
-  // 创建 AbortController
-  abortController = new AbortController();
-
-  // ---- RAF 批量更新缓冲区（双通道：response → 聊天气泡，thought → 思考面板） ----
-  let contentBuffer = '';
-  let thinkingBuffer = '';
-  let rafId: number | null = null;
-  let lastFlush = 0;
-
-  function flushAll() {
-    const msg = messages.value.find(m => m.id === assistantId);
-    if (!msg) { rafId = null; return; }
-    if (contentBuffer) { msg.content += contentBuffer; contentBuffer = ''; }
-    if (thinkingBuffer) { msg.thinkingContent += thinkingBuffer; thinkingBuffer = ''; }
-    rafId = null;
-  }
-
-  function scheduleFlush() {
-    if (rafId !== null) return;
-    const now = performance.now();
-    if (now - lastFlush < 50) {
-      rafId = requestAnimationFrame(() => {
-        flushAll();
-        lastFlush = performance.now();
-      });
-    } else {
-      flushAll();
-      lastFlush = now;
-    }
-  }
-
-  try {
-    const response = await fetch(`${apiBase}/api/plan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, sessionId }),
-      signal: abortController.signal,
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error('Response body not readable');
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          const event = JSON.parse(line.slice(6));
-          const msg = messages.value.find(m => m.id === assistantId);
-          if (!msg) continue;
-
-          switch (event.type) {
-            case 'start':
-              if (event.data?.sessionId) {
-                localStorage.setItem('plan_session_id', event.data.sessionId);
-              }
-              if (event.message) {
-                contentBuffer += event.message;
-                scheduleFlush();
-              }
-              break;
-            case 'thought':
-              // 推理过程 → 进思考面板（thinkingContent）
-              if (event.content) {
-                thinkingBuffer += event.content;
-                scheduleFlush();
-              }
-              break;
-            case 'response':
-              // 最终回答 → 进聊天气泡
-              if (event.content) {
-                contentBuffer += event.content;
-                scheduleFlush();
-              }
-              break;
-            case 'action':
-              msg.steps.push({ type: 'action', step: event.step || 0, tool: event.tool, args: event.args });
-              break;
-            case 'observation':
-              msg.steps.push({ type: 'observation', step: event.step || 0, data: event.data });
-              break;
-            case 'plan_partial':
-              msg.steps.push({ type: 'plan_partial', step: event.step || 0, data: event.data });
-              break;
-            case 'plan_complete':
-              flushAll();
-              msg.streaming = false;
-              if (event.plan && event.plan.days?.length > 0) {
-                tripStore.setPlan(event.plan);
-                msg.content = buildPlanSummary(event.plan);
-              } else if (msg.content.trim().startsWith('{')) {
-                msg.content = '⚠️ 未能生成有效行程，请重新描述您的需求';
-              }
-              break;
-            case 'error':
-              flushAll();
-              error.value = event.message;
-              msg.content += `\n\n⚠️ ${event.message}`;
-              msg.streaming = false;
-              break;
-          }
-        } catch { /* ignore parse errors */ }
-      }
-    }
-    // 流正常结束，flush 剩余内容
-    flushAll();
-  } catch (e: any) {
-    flushAll();
-    const msg = messages.value.find(m => m.id === assistantId);
-    if (e.name === 'AbortError') {
-      // 用户打断 — 保留已有内容，标记中断
-      if (msg && msg.content) {
-        msg.content += '\n\n---\n⏸️ *已中断*';
-      } else if (msg) {
-        msg.content = '⏸️ 已取消';
-      }
-      msg && (msg.streaming = false);
-    } else {
-      error.value = e.message;
-      if (msg) {
-        msg.content += `\n\n⚠️ 请求失败：${e.message}`;
-        msg.streaming = false;
-      }
-    }
-  } finally {
-    abortController = null;
-    isStreaming.value = false;
-    scrollToBottom();
-  }
+  sendMessage(text);
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -244,51 +54,12 @@ function handleQuickPrompt(prompt: string) {
 }
 
 function handleNewChat() {
-  messages.value = [];
-  tripStore.setPlan({ city: '', days: [], totalBudget: '', tips: [] });
+  clearMessages();
   localStorage.removeItem('plan_session_id');
 }
 
 function toggleSteps(msgId: string) {
   showSteps.value[msgId] = !showSteps.value[msgId];
-}
-
-// ---- 从 TripPlan 生成可读摘要（替代原始 JSON） ----
-function buildPlanSummary(plan: any): string {
-  const weatherIcon = (c: string) => {
-    if (c.includes('晴')) return '☀️';
-    if (c.includes('多云')) return '⛅';
-    if (c.includes('阴')) return '☁️';
-    if (c.includes('雨')) return '🌧️';
-    if (c.includes('雪')) return '❄️';
-    return '🌤️';
-  };
-
-  let md = `✅ 已为您规划好 **${plan.city}** **${plan.days.length}** 日行程！\n\n`;
-
-  // 每日概览表
-  md += `| 日期 | 天气 | 景点 | 午餐 | 晚餐 | 酒店 |\n`;
-  md += `|------|------|------|------|------|------|\n`;
-  for (const day of plan.days) {
-    const date = (day.date || '').slice(5); // MM-DD
-    const w = day.weather;
-    const weatherStr = w ? `${weatherIcon(w.condition)} ${w.condition} ${w.temperature?.low}~${w.temperature?.high}°` : '-';
-    const attractions = (day.activities || []).filter((a: any) => a.type === 'attraction').map((a: any) => a.name).join('<br>');
-    const lunch = (day.activities || []).filter((a: any) => a.type === 'restaurant').map((a: any) => a.name).slice(0, 1).join('') || '-';
-    const dinner = (day.activities || []).filter((a: any) => a.type === 'restaurant').map((a: any) => a.name).slice(1, 2).join('') || '-';
-    const hotel = day.hotel?.name || '-';
-    md += `| ${date} | ${weatherStr} | ${attractions} | ${lunch} | ${dinner} | ${hotel} |\n`;
-  }
-
-  md += `\n💵 **${plan.totalBudget || '请参考详细行程'}**\n`;
-
-  if (plan.tips?.length > 0) {
-    for (const tip of plan.tips) {
-      md += `💡 ${tip}\n`;
-    }
-  }
-
-  return md;
 }
 
 // ---- Markdown 渲染 ----
@@ -397,36 +168,36 @@ function formatJSON(obj: any): string {
   try { return JSON.stringify(obj, null, 2); } catch { return String(obj); }
 }
 
-// 初始化 routes（side effect）
-useRoutes();
+// 路线规划由 TravelMap 组件内通过高德 Driving API 直接完成
 </script>
 
 <template>
-  <div class="planner">
+  <div class="h-screen flex overflow-hidden">
     <!-- 聊天区域 -->
-    <div class="chat-area" :class="{ shrunk: hasPlan }">
+    <div class="chat-area flex-1 flex flex-col min-w-0 transition-[flex] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] bg-bg" :class="{ shrunk: hasPlan }">
       <!-- 头部 -->
-      <header class="chat-header">
-        <div class="header-left">
-          <h1>🤖 AI 旅行规划</h1>
-          <span class="subtitle">基于美团酒旅真实数据 · 高德天气 · 实时对话</span>
+      <header class="flex items-center justify-between px-5 py-3 border-b border-border bg-bg-card shrink-0">
+        <div class="flex flex-col gap-0.5">
+          <h1 class="text-[17px] font-bold m-0 text-text-primary">🤖 AI 旅行规划</h1>
+          <span class="text-[11px] text-text-secondary">基于美团酒旅真实数据 · 高德天气 · 实时对话</span>
         </div>
-        <button class="new-chat-btn" @click="handleNewChat" :disabled="isStreaming">
+        <button class="px-3.5 py-1.5 border border-border rounded-lg bg-bg-panel text-[13px] cursor-pointer text-text-secondary transition-all duration-150 hover:border-primary hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed" @click="handleNewChat" :disabled="isStreaming">
           新对话
         </button>
       </header>
 
       <!-- 消息列表 -->
-      <div class="chat-body" ref="chatBodyRef">
+      <div class="flex-1 overflow-y-auto p-5 flex flex-col gap-4" ref="chatBodyRef">
         <!-- 空状态 -->
-        <div class="welcome" v-if="messages.length === 0">
-          <div class="welcome-icon">🗺️</div>
-          <h2>用自然语言描述您的旅行需求</h2>
-          <p>我会自动分析目的地、天数、偏好，通过美团数据为您规划完美旅程</p>
-          <div class="quick-prompts">
+        <div class="flex-1 flex flex-col items-center justify-center gap-2.5 text-center px-5 py-10" v-if="messages.length === 0">
+          <div class="text-[56px]">🗺️</div>
+          <h2 class="text-xl font-bold gradient-text">用自然语言描述您的旅行需求</h2>
+          <p class="text-text-secondary text-sm max-w-[420px]">我会自动分析目的地、天数、偏好，通过美团数据为您规划完美旅程</p>
+          <div class="flex flex-wrap gap-2 mt-3 justify-center">
             <button
               v-for="qp in quickPrompts" :key="qp"
-              class="quick-btn" @click="handleQuickPrompt(qp)"
+              class="px-4 py-2 border border-border rounded-[20px] bg-bg-card text-[13px] cursor-pointer text-text-secondary transition-all duration-150 hover:border-primary hover:text-primary"
+              @click="handleQuickPrompt(qp)"
             >{{ qp }}</button>
           </div>
         </div>
@@ -434,63 +205,64 @@ useRoutes();
         <!-- 消息气泡 -->
         <div
           v-for="msg in messages" :key="msg.id"
-          :class="['msg-row', `msg-${msg.role}`]"
+          class="flex"
+          :class="msg.role === 'user' ? 'justify-end' : msg.role === 'system' ? 'justify-center' : 'justify-start'"
         >
           <!-- 用户消息 -->
-          <div v-if="msg.role === 'user'" class="user-bubble">
+          <div v-if="msg.role === 'user'" class="max-w-[80%] px-[18px] py-2.5 rounded-[18px_18px_4px_18px] bg-gradient-to-br from-primary to-[#7c3aed] text-white text-sm leading-relaxed">
             {{ msg.content }}
           </div>
 
           <!-- AI 消息 -->
-          <div v-else-if="msg.role === 'assistant'" class="ai-message">
-            <div class="ai-avatar">🤖</div>
-            <div class="ai-body">
+          <div v-else-if="msg.role === 'assistant'" class="flex gap-2.5 max-w-[92%] w-full animate-msg-fade-in">
+            <div class="w-[34px] h-[34px] rounded-full bg-bg-card flex items-center justify-center text-lg shrink-0 border border-border">🤖</div>
+            <div class="flex-1 min-w-0">
               <!-- 深度思考（DeepSeek 风格折叠面板） -->
-              <div v-if="msg.thinkingContent || msg.steps.length > 0" class="deep-think">
-                <button class="think-header" @click="toggleSteps(msg.id)">
-                  <span class="think-icon">{{ msg.streaming ? '🧠' : '✅' }}</span>
-                  <span class="think-title">
+              <div v-if="msg.thinkingContent || msg.steps.length > 0" class="mb-3 border border-[#e5e7eb] rounded-lg overflow-hidden bg-[#f9fafb]">
+                <button class="flex items-center gap-2 w-full px-3.5 py-2.5 border-0 bg-transparent text-[13px] cursor-pointer text-[#6b7280] transition-colors duration-150 hover:bg-[#f3f4f6]" @click="toggleSteps(msg.id)">
+                  <span class="text-[15px]">{{ msg.streaming ? '🧠' : '✅' }}</span>
+                  <span class="font-medium flex-1 text-left">
                     {{ msg.streaming ? '深度思考中...' : `已完成深度思考 (${msg.steps.length} 步)` }}
                   </span>
-                  <span class="think-chevron">{{ showSteps[msg.id] ? '▾' : '▸' }}</span>
+                  <span class="text-[11px] text-[#9ca3af] transition-transform duration-200">{{ showSteps[msg.id] ? '▾' : '▸' }}</span>
                 </button>
-                <div :class="['think-body', { expanded: showSteps[msg.id] }]">
+                <div class="think-body" :class="{ expanded: showSteps[msg.id] }">
                   <!-- 思考文本内容 -->
-                  <div v-if="msg.thinkingContent" class="think-text">{{ msg.thinkingContent }}</div>
+                  <div v-if="msg.thinkingContent" class="px-3.5 py-2.5 text-[13px] leading-relaxed text-[#4b5563] whitespace-pre-wrap border-b border-[#f3f4f6]">{{ msg.thinkingContent }}</div>
                   <!-- 工具步骤 -->
                   <div
                     v-for="(step, si) in msg.steps" :key="si"
-                    :class="['think-step', `step-${step.type}`]"
+                    :class="['flex items-center gap-2 px-3.5 py-1.5 pl-6 text-xs text-[#6b7280] border-t border-[#f3f4f6] relative first:border-t-0', `step-${step.type}`]"
                   >
-                    <span class="step-dot"></span>
-                    <span class="step-text">{{ getStepLabel(step) }}</span>
-                    <span class="step-meta">{{ getStepMeta(step) }}</span>
+                    <span class="step-dot w-1.5 h-1.5 rounded-full bg-[#d1d5db] shrink-0" />
+                    <span class="flex-1">{{ getStepLabel(step) }}</span>
+                    <span class="text-[11px] text-[#9ca3af]">{{ getStepMeta(step) }}</span>
                   </div>
                 </div>
               </div>
 
               <!-- AI 内容 -->
-              <div :class="['ai-content', { streaming: msg.streaming }]" v-html="renderMarkdown(msg.content)" />
-              <span v-if="msg.streaming" class="typing-cursor"></span>
+              <div class="ai-content text-sm leading-relaxed text-text-primary" :class="{ streaming: msg.streaming }" v-html="renderMarkdown(msg.content)" />
+              <span v-if="msg.streaming" class="typing-cursor inline-block w-0.5 h-[18px] bg-primary ml-0.5 align-text-bottom rounded-sm animate-cursor-blink" />
             </div>
           </div>
 
           <!-- 系统消息 -->
-          <div v-else-if="msg.role === 'system'" class="system-bubble">
+          <div v-else-if="msg.role === 'system'" class="px-4 py-2 rounded-lg bg-[#fefce8] text-[#a16207] text-xs max-w-[80%]">
             {{ msg.content }}
           </div>
         </div>
 
         <!-- 错误提示 -->
-        <div v-if="error" class="error-toast">⚠️ {{ error }}</div>
+        <div v-if="error" class="px-4 py-2.5 bg-[#fef2f2] text-[#dc2626] rounded-lg text-[13px]">⚠️ {{ error }}</div>
       </div>
 
       <!-- 输入框 -->
-      <footer class="chat-footer">
-        <div class="input-row">
+      <footer class="px-5 py-3 border-t border-border bg-bg-card shrink-0">
+        <div class="flex gap-2 items-end">
           <textarea
             v-model="inputText"
-            class="chat-input"
+            class="flex-1 px-3.5 py-2.5 border border-border rounded-xl text-sm font-[inherit] leading-relaxed resize-none outline-none bg-bg-panel text-text-primary min-h-[44px] max-h-[120px] transition-[border-color] duration-200 focus:border-primary focus:shadow-[0_0_0_3px_rgba(37,99,235,0.1)] disabled:opacity-60"
             placeholder="输入您的旅行需求，Enter 发送，Shift+Enter 换行..."
             :disabled="isStreaming"
             rows="2"
@@ -499,7 +271,7 @@ useRoutes();
           <!-- 流式输出中 → 显示打断按钮 -->
           <button
             v-if="isStreaming"
-            class="stop-btn"
+            class="px-[22px] py-2.5 border-0 rounded-lg bg-gradient-to-br from-[#ef4444] to-[#dc2626] text-white text-sm font-semibold cursor-pointer transition-all duration-200 shrink-0 animate-pulse-stop hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(239,68,68,0.3)]"
             @click="stopGeneration"
           >
             ⏹ 停止
@@ -507,322 +279,115 @@ useRoutes();
           <!-- 空闲 → 显示发送按钮 -->
           <button
             v-else
-            class="send-btn"
+            class="px-[22px] py-2.5 border-0 rounded-lg bg-gradient-to-br from-primary to-[#7c3aed] text-white text-sm font-semibold cursor-pointer transition-all duration-200 shrink-0 hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(37,99,235,0.3)] disabled:opacity-60 disabled:cursor-not-allowed"
             @click="handleSend"
             :disabled="!inputText.trim()"
           >
             发送
           </button>
         </div>
-        <div class="input-hint">Agent 会自动分析城市、天数、偏好 · 信息不足时会追问</div>
+        <div class="text-[11px] text-text-secondary opacity-50 mt-1.5">Agent 会自动分析城市、天数、偏好 · 信息不足时会追问</div>
       </footer>
     </div>
 
-    <!-- 地图+时间线面板（规划完成后从右侧滑出） -->
-    <div class="plan-panel" :class="{ visible: hasPlan }">
-      <div class="map-section">
-        <ClientOnly fallback-tag="div" fallback="地图加载中...">
-          <TravelMap />
-        </ClientOnly>
-      </div>
-      <div class="timeline-section">
-        <TimelinePanel />
-      </div>
+    <!-- 地图区域（规划完成后滑出） -->
+    <div class="map-area flex-[0_0_0] overflow-hidden border-l border-border bg-bg-card transition-[flex] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]" :class="{ visible: hasPlan }">
+      <ClientOnly fallback-tag="div" fallback="地图加载中...">
+        <TravelMap />
+      </ClientOnly>
+    </div>
+
+    <!-- 时间线区域（规划完成后滑出） -->
+    <div class="timeline-area flex-[0_0_0] overflow-y-auto border-l border-border bg-bg-card transition-[flex] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]" :class="{ visible: hasPlan }">
+      <TimelinePanel />
     </div>
   </div>
 </template>
 
 <style scoped>
-.planner {
-  height: 100vh;
-  display: flex;
-  overflow: hidden;
-}
-
-/* ---- 聊天区域 ---- */
-.chat-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  transition: flex 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  background: var(--bg);
-}
+/* 三列布局面板滑出过渡（flex-basis calc 无法用 Tailwind 表达） */
 .chat-area.shrunk {
-  flex: 0 0 55%;
+  flex: 0 0 calc(100% * 2 / 7);
+}
+.map-area.visible {
+  flex: 0 0 calc(100% * 3 / 7);
+}
+.timeline-area.visible {
+  flex: 0 0 calc(100% * 2 / 7);
 }
 
-.chat-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-card);
-  flex-shrink: 0;
-}
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.header-left h1 {
-  font-size: 17px;
-  font-weight: 700;
-  margin: 0;
-  color: var(--text);
-}
-.subtitle {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-.new-chat-btn {
-  padding: 6px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-panel);
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--text-secondary);
-  transition: all 0.15s;
-}
-.new-chat-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
-.new-chat-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* ---- 消息列表 ---- */
-.chat-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.welcome {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  text-align: center;
-  padding: 40px 20px;
-}
-.welcome-icon { font-size: 56px; }
-.welcome h2 {
-  font-size: 20px;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--primary), #8b5cf6);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.welcome p { color: var(--text-secondary); font-size: 14px; max-width: 420px; }
-
-.quick-prompts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; justify-content: center; }
-.quick-btn {
-  padding: 8px 16px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  background: var(--bg-card);
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--text-secondary);
-  transition: all 0.15s;
-}
-.quick-btn:hover { border-color: var(--primary); color: var(--primary); }
-
-/* ---- 消息气泡 ---- */
-.msg-row { display: flex; }
-.msg-user { justify-content: flex-end; }
-.msg-assistant { justify-content: flex-start; }
-.msg-system { justify-content: center; }
-
-.user-bubble {
-  max-width: 80%;
-  padding: 10px 18px;
-  border-radius: 18px 18px 4px 18px;
-  background: linear-gradient(135deg, var(--primary), #7c3aed);
-  color: white;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.ai-message {
-  display: flex;
-  gap: 10px;
-  max-width: 92%;
-  width: 100%;
-  animation: msg-fade-in 0.3s ease;
-}
-@keyframes msg-fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.ai-avatar {
-  width: 34px; height: 34px;
-  border-radius: 50%;
-  background: var(--bg-card);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 18px;
-  flex-shrink: 0;
-  border: 1px solid var(--border);
-}
-.ai-body { flex: 1; min-width: 0; }
-
-/* ---- DeepSeek 风格深度思考面板 ---- */
-.deep-think {
-  margin-bottom: 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #f9fafb;
-}
-.think-header {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%; padding: 10px 14px;
-  border: none; background: none;
-  font-size: 13px; cursor: pointer;
-  color: #6b7280; transition: background 0.15s;
-}
-.think-header:hover { background: #f3f4f6; }
-.think-icon { font-size: 15px; }
-.think-title { font-weight: 500; flex: 1; text-align: left; }
-.think-chevron { font-size: 11px; color: #9ca3af; transition: transform 0.2s; }
-
+/* 思考面板折叠过渡 */
 .think-body {
-  max-height: 0; overflow: hidden;
+  max-height: 0;
+  overflow: hidden;
   transition: max-height 0.3s ease;
 }
 .think-body.expanded {
   max-height: 600px;
   overflow-y: auto;
 }
-.think-text {
-  padding: 10px 14px;
-  font-size: 13px; line-height: 1.6;
-  color: #4b5563;
-  white-space: pre-wrap;
-  border-bottom: 1px solid #f3f4f6;
+
+/* 深度思考步骤类型标识 */
+.step-action .step-dot {
+  background: #f59e0b;
+}
+.step-observation .step-dot {
+  background: #10b981;
+}
+.step-plan_partial .step-dot {
+  background: #3b82f6;
 }
 
-.think-step {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 14px 6px 24px;
-  font-size: 12px; color: #6b7280;
-  border-top: 1px solid #f3f4f6;
-  position: relative;
+/* 欢迎标题渐变色文字 */
+.gradient-text {
+  background: linear-gradient(135deg, #2563eb, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
-.think-step:first-child { border-top: none; }
-.step-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: #d1d5db; flex-shrink: 0;
-}
-.step-action .step-dot { background: #f59e0b; }
-.step-observation .step-dot { background: #10b981; }
-.step-plan_partial .step-dot { background: #3b82f6; }
-.step-text { flex: 1; }
-.step-meta { font-size: 11px; color: #9ca3af; }
 
-/* AI 内容 */
-.ai-content { font-size: 14px; line-height: 1.6; color: var(--text); }
-.ai-content :deep(.md-image) {
-  max-width: 100%; max-height: 300px; border-radius: 8px; margin: 6px 0;
-  display: block;
-}
-.ai-content :deep(.md-link) { color: var(--primary); text-decoration: underline; }
-.ai-content :deep(.md-table) { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
-.ai-content :deep(.md-table th), .ai-content :deep(.md-table td) {
-  border: 1px solid var(--border); padding: 6px 10px; text-align: left;
-}
-.ai-content :deep(.md-table th) { background: var(--bg-panel); font-weight: 600; }
-.ai-content :deep(.md-paragraph) { margin: 4px 0; }
-.ai-content :deep(.inline-code) {
-  background: var(--bg-panel); padding: 1px 5px; border-radius: 4px; font-size: 12px;
-}
-/* DeepSeek 风格打字光标 */
-.typing-cursor {
-  display: inline-block;
-  width: 2px; height: 18px;
-  background: var(--primary);
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  border-radius: 1px;
-  animation: cursor-blink 1s ease-in-out infinite;
-}
-@keyframes cursor-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-
+/* 打字光标 */
 .ai-content.streaming {
   display: inline;
 }
 
-.system-bubble {
-  padding: 8px 16px; border-radius: 8px;
-  background: #fefce8; color: #a16207;
-  font-size: 12px; max-width: 80%;
+/* v-html 渲染内联代码 */
+.ai-content :deep(.inline-code) {
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
-.error-toast {
-  padding: 10px 16px; background: #fef2f2; color: #dc2626;
-  border-radius: 8px; font-size: 13px;
+/* v-html 渲染的 markdown 内容 */
+.ai-content :deep(.md-image) {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  margin: 6px 0;
+  display: block;
 }
-
-/* ---- 输入框 ---- */
-.chat-footer { padding: 12px 20px; border-top: 1px solid var(--border); background: var(--bg-card); flex-shrink: 0; }
-.input-row { display: flex; gap: 8px; align-items: flex-end; }
-.chat-input {
-  flex: 1; padding: 10px 14px;
-  border: 1px solid var(--border); border-radius: 12px;
-  font-size: 14px; font-family: inherit; line-height: 1.5;
-  resize: none; outline: none;
-  background: var(--bg-panel); color: var(--text);
-  min-height: 44px; max-height: 120px;
-  transition: border-color 0.2s;
+.ai-content :deep(.md-link) {
+  color: #2563eb;
+  text-decoration: underline;
 }
-.chat-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-.chat-input:disabled { opacity: 0.6; }
-
-.send-btn {
-  padding: 10px 22px; border: none; border-radius: 10px;
-  background: linear-gradient(135deg, var(--primary), #7c3aed);
-  color: white; font-size: 14px; font-weight: 600; cursor: pointer;
-  transition: all 0.2s; flex-shrink: 0;
+.ai-content :deep(.md-table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13px;
 }
-.send-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
-.send-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.stop-btn {
-  padding: 10px 22px; border: none; border-radius: 10px;
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: white; font-size: 14px; font-weight: 600; cursor: pointer;
-  transition: all 0.2s; flex-shrink: 0;
-  animation: pulse-stop 1.5s ease-in-out infinite;
+.ai-content :deep(.md-table th),
+.ai-content :deep(.md-table td) {
+  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
+  text-align: left;
 }
-.stop-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); }
-@keyframes pulse-stop { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
-
-.input-hint { font-size: 11px; color: var(--text-secondary); opacity: 0.5; margin-top: 6px; }
-
-/* ---- 地图+时间线侧边面板 ---- */
-.plan-panel {
-  width: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--border);
-  background: var(--bg-card);
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+.ai-content :deep(.md-table th) {
+  background: #f1f5f9;
+  font-weight: 600;
 }
-.plan-panel.visible {
-  width: 45%;
-}
-.map-section {
-  height: 55%;
-  border-bottom: 1px solid var(--border);
-}
-.timeline-section {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
+.ai-content :deep(.md-paragraph) {
+  margin: 4px 0;
 }
 </style>

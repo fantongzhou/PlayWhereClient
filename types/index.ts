@@ -75,14 +75,24 @@ export const PREFERENCES = [
 ] as const;
 
 // ---- 路线导航 ----
+export type TransportMode = 'walking' | 'bicycling' | 'driving' | 'transit';
+
+/** 单条路线信息 */
+export interface RouteInfo {
+  mode: TransportMode;
+  distance: number;   // 米
+  duration: number;   // 秒
+  price: number;      // 预估费用（元）
+  polyline: [number, number][];
+}
+
+/** 两点间的路线段（含多模式 + 推荐） */
 export interface RouteSegment {
   from: { name: string; lat: number; lng: number };
   to: { name: string; lat: number; lng: number };
-  path: [number, number][];
-  distance: number;
-  mode: string;
-  duration: number;
-  price: number;
+  recommended: TransportMode;
+  selected: TransportMode;
+  routes: Partial<Record<TransportMode, RouteInfo>>;
 }
 
 export const BUDGETS = [

@@ -8,6 +8,11 @@ export const useTripStore = defineStore('trip', () => {
   const plan = ref<TripPlan | null>(null);
   const activeDay = ref(1);
   const routesByDay = ref<Record<number, RouteSegment[]>>({});
+  const focusActivity = ref<{ name: string; city: string } | null>(null);
+
+  function setFocus(name: string, city: string) {
+    focusActivity.value = { name, city };
+  }
 
   function setRequest(msg: string) {
     request.value = msg;
@@ -47,6 +52,8 @@ export const useTripStore = defineStore('trip', () => {
     plan,
     activeDay,
     routesByDay,
+    focusActivity,
+    setFocus,
     setRequest,
     setPlan,
     setRoutesForDay,
