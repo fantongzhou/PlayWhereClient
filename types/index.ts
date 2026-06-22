@@ -51,7 +51,7 @@ export interface TripPlan {
 
 // ---- SSE 事件 ----
 export type SSEEventType =
-  | 'start' | 'thought' | 'action' | 'observation'
+  | 'start' | 'thought' | 'response' | 'action' | 'observation'
   | 'plan_partial' | 'plan_complete' | 'error';
 
 export interface ThinkingStep {

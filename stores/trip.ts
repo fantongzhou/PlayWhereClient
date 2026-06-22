@@ -1,16 +1,16 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import type { TripPlan, TripRequest, DayPlan, RouteSegment } from '../types';
+import type { TripPlan, DayPlan, RouteSegment } from '../types';
 
 export const useTripStore = defineStore('trip', () => {
   const loading = ref(false);
-  const request = ref<TripRequest | null>(null);
+  const request = ref<string | null>(null);
   const plan = ref<TripPlan | null>(null);
   const activeDay = ref(1);
   const routesByDay = ref<Record<number, RouteSegment[]>>({});
 
-  function setRequest(req: TripRequest) {
-    request.value = req;
+  function setRequest(msg: string) {
+    request.value = msg;
     plan.value = null;
     activeDay.value = 1;
     routesByDay.value = {};
