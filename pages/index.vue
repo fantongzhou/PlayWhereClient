@@ -194,7 +194,7 @@ const steps = [
           <a href="#" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">使用条款</a>
         </div>
         <p class="text-xs text-slate-400">
-          © 2024 上哪玩旅游助手. Powered by DeepSeek · 高德地图 · 美团
+          © 2026 上哪玩旅游助手. Powered by DeepSeek · 高德地图 · 美团
         </p>
       </div>
     </footer>
