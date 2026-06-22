@@ -1,7 +1,7 @@
-# 🗺️ Stitch AI — 智能旅行规划助手
+# 🗺️ 上哪玩旅游助手 — 智能旅行规划助手
 
 <p align="center">
-  <img src="screenshots/landing-page.png" alt="Stitch AI Landing Page" width="800" />
+  <img src="screenshots/landing-page.png" alt="上哪玩旅游助手 Landing Page" width="800" />
 </p>
 
 <p align="center">

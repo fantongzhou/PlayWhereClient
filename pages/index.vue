@@ -47,8 +47,8 @@ const steps = [
     <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
       <nav class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <div class="flex items-center gap-2.5">
-          <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center text-white font-bold text-sm">S</div>
-          <span class="text-lg font-semibold text-slate-900 tracking-tight">Stitch AI</span>
+          <div class="w-9 h-9 bg-indigo-700 rounded-lg flex items-center justify-center text-white font-bold text-sm">上</div>
+          <span class="text-lg font-semibold text-slate-900 tracking-tight">上哪玩旅游助手</span>
         </div>
         <div class="hidden md:flex items-center gap-8">
           <a href="#features" class="text-sm text-slate-500 hover:text-slate-900 transition-colors">功能</a>
@@ -111,7 +111,7 @@ const steps = [
     <section id="features" class="py-24 bg-white">
       <div class="max-w-6xl mx-auto px-6">
         <div class="text-center mb-16">
-          <h2 class="text-3xl font-bold text-slate-900 tracking-tight">为什么选择 Stitch AI</h2>
+          <h2 class="text-3xl font-bold text-slate-900 tracking-tight">为什么选择 上哪玩旅游助手</h2>
           <p class="mt-3 text-slate-500 max-w-xl mx-auto">不只是行程规划——而是从灵感到出发的一站式旅行助手</p>
         </div>
 
@@ -185,8 +185,8 @@ const steps = [
     <footer class="border-t border-gray-100 bg-white">
       <div class="max-w-6xl mx-auto px-6 py-12 flex flex-col md:flex-row items-center justify-between gap-6">
         <div class="flex items-center gap-2">
-          <div class="w-7 h-7 bg-indigo-700 rounded flex items-center justify-center text-white font-bold text-xs">S</div>
-          <span class="text-sm font-medium text-slate-600">Stitch AI Travel</span>
+          <div class="w-7 h-7 bg-indigo-700 rounded flex items-center justify-center text-white font-bold text-xs">上</div>
+          <span class="text-sm font-medium text-slate-600">上哪玩旅游助手 Travel</span>
         </div>
         <div class="flex items-center gap-6">
           <a href="#" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">关于我们</a>
@@ -194,7 +194,7 @@ const steps = [
           <a href="#" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">使用条款</a>
         </div>
         <p class="text-xs text-slate-400">
-          © 2024 Stitch AI. Powered by DeepSeek · 高德地图 · 美团
+          © 2024 上哪玩旅游助手. Powered by DeepSeek · 高德地图 · 美团
         </p>
       </div>
     </footer>

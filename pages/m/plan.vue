@@ -46,7 +46,7 @@ function newChat() {
     <header class="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center justify-between shrink-0 z-30">
       <div class="flex items-center gap-2">
         <div class="w-7 h-7 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs">S</div>
-        <h1 class="text-base font-semibold text-slate-800">AI 旅行规划</h1>
+        <h1 class="text-base font-semibold text-slate-800">上哪玩旅游助手</h1>
       </div>
       <div class="flex items-center gap-2">
         <a href="/" class="text-xs text-slate-400 hover:text-slate-600">首页</a>
@@ -179,25 +179,25 @@ function newChat() {
           <span class="text-[10px] text-slate-400 mt-1">下拉收起</span>
         </div>
 
-        <!-- Drawer Content -->
-        <div class="flex-1 flex flex-col overflow-hidden">
-          <!-- 地图区域 -->
-          <div class="h-[45%] shrink-0 bg-slate-100 mx-3 rounded-xl overflow-hidden border border-gray-200">
+        <!-- Drawer Content：地图 + 分隔线固定，行程 + 贴士滚动 -->
+        <div class="flex-1 flex flex-col overflow-hidden px-3">
+          <!-- 地图区域（固定） -->
+          <div class="h-52 shrink-0 rounded-xl overflow-hidden border border-gray-200 mb-2">
             <ClientOnly fallback-tag="div" fallback="地图加载中...">
               <TravelMap />
             </ClientOnly>
           </div>
 
-          <!-- 分隔 + 标签 -->
-          <div class="flex items-center gap-2 px-4 py-2 shrink-0">
+          <!-- 分隔 + 标签（固定） -->
+          <div class="flex items-center gap-2 py-2 shrink-0">
             <div class="flex-1 h-px bg-gray-200" />
             <span class="text-xs text-slate-400 font-medium">行程时间线</span>
             <div class="flex-1 h-px bg-gray-200" />
           </div>
 
-          <!-- 行程区域 -->
-          <div class="flex-1 overflow-y-auto px-3 pb-6">
-            <TimelinePanel />
+          <!-- 行程 + 贴士（可滚动） -->
+          <div class="flex-1 overflow-y-auto pb-6">
+            <TimelinePanel flat />
           </div>
         </div>
       </div>

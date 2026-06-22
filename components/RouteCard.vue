@@ -90,7 +90,7 @@ function formatDuration(seconds: number): string {
         <span v-if="isTransit(mode)" class="text-amber-500 text-[10px]">高德地图</span>
         <span v-else class="text-slate-400 text-[10px]">
           {{ formatDuration(segment.routes[mode]?.duration ?? 0) }}
-          · {{ segment.routes[mode]?.price ? `¥${segment.routes[mode]?.price}` : '免费' }}
+          · {{ segment.routes[mode]?.price ? `¥${segment.routes[mode]?.price}` : '' }}
         </span>
       </button>
     </div>

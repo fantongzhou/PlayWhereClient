@@ -2,6 +2,11 @@
 import { useTripStore } from '../stores/trip';
 import DayCard from './DayCard.vue';
 
+const props = withDefaults(defineProps<{
+  /** 平铺模式：不设 flex-1 和内滚，由外层容器统一滚动（移动端 drawer 使用） */
+  flat?: boolean;
+}>(), { flat: false });
+
 const tripStore = useTripStore();
 
 function getWeatherIcon(condition: string): string {
@@ -16,7 +21,7 @@ function getWeatherIcon(condition: string): string {
 </script>
 
 <template>
-  <div class="flex flex-col h-full" v-if="tripStore.plan">
+  <div :class="['flex flex-col', props.flat ? '' : 'h-full']" v-if="tripStore.plan">
     <!-- 头部 -->
     <div class="px-4 py-3 border-b border-gray-100 shrink-0">
       <h2 class="text-base font-bold text-slate-900">
@@ -40,8 +45,8 @@ function getWeatherIcon(condition: string): string {
       </button>
     </div>
 
-    <!-- 行程内容（可滚动） -->
-    <div class="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+    <!-- 行程内容（flat 模式下不设 flex-1 和 overflow，由外层滚动） -->
+    <div :class="props.flat ? 'p-4 space-y-6' : 'flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar'">
       <DayCard
         v-for="day in tripStore.plan.days.filter(d => d.day === tripStore.activeDay)"
         :key="day.day"

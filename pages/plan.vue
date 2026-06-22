@@ -30,7 +30,7 @@ const {
     <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shrink-0 z-20">
       <div class="flex items-center gap-2">
         <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-sm">S</div>
-        <h1 class="text-xl font-semibold tracking-tight text-slate-800">AI 旅行规划</h1>
+        <h1 class="text-xl font-semibold tracking-tight text-slate-800">上哪玩旅游助手</h1>
       </div>
       <div class="flex items-center gap-2">
         <a href="/m/plan" class="text-xs text-slate-400 hover:text-slate-600 md:hidden">📱</a>
