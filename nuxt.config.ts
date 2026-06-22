@@ -22,7 +22,6 @@ export default defineNuxtConfig({
   },
 
   devServer: {
-    host: 'http://192.168.31.150',
     port: 5173,
   },
 
