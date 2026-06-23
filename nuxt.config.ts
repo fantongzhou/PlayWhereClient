@@ -8,13 +8,9 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
-  // 线上环境接口 baseurl；开发环境留空走 devProxy/vite proxy
+  // 接口请求统一走 nitro routeRules 代理到 localhost:3333
   runtimeConfig: {
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE
-        || (process.env.NODE_ENV === 'production'
-          ? 'https://play-where-server.vercel.app'
-          : ''),
       amapKey: process.env.NUXT_PUBLIC_AMAP_KEY || process.env.AMAP_API_KEY || '',
       amapSecurityCode: process.env.NUXT_PUBLIC_AMAP_SECURITY_CODE || '',
       amapWsKey: process.env.NUXT_PUBLIC_AMAP_WS_KEY || '',
@@ -26,21 +22,9 @@ export default defineNuxtConfig({
   },
 
   nitro: {
-    devProxy: {
-      '/api': {
-        target: 'http://localhost:3333',
-        changeOrigin: true,
-      },
-    },
-  },
-
-  vite: {
-    server: {
-      proxy: {
-        '/api': {
-          target: 'http://localhost:3333',
-          changeOrigin: true,
-        },
+    routeRules: {
+      '/api/**': {
+        proxy: { to: 'http://localhost:3333/api/**' },
       },
     },
   },
