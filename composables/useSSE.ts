@@ -38,6 +38,8 @@ function getOrCreateSessionId(): string {
 export function useSSE() {
   const tripStore = useTripStore();
 
+  const apiBase = useApiBase();
+
   const messages = ref<Message[]>([]);
   const isStreaming = ref(false);
   const error = ref<string | null>(null);
@@ -102,7 +104,7 @@ export function useSSE() {
     }
 
     try {
-      const response = await fetch('/api/plan', {
+      const response = await fetch(`${apiBase}/api/plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, sessionId }),
