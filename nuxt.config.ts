@@ -8,7 +8,6 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
-  // 接口请求统一走 nitro routeRules 代理到 localhost:3333
   runtimeConfig: {
     public: {
       amapKey: process.env.NUXT_PUBLIC_AMAP_KEY || process.env.AMAP_API_KEY || '',
@@ -21,13 +20,8 @@ export default defineNuxtConfig({
     port: 5173,
   },
 
-  nitro: {
-    routeRules: {
-      '/api/**': {
-        proxy: { to: 'http://localhost:3333/api/**' },
-      },
-    },
-  },
+  // API 代理由 server/middleware/api-proxy.ts 处理（支持 SSE 流式响应）
+  nitro: {},
 
   typescript: {
     strict: true,
