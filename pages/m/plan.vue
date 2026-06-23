@@ -21,6 +21,7 @@ const {
   renderMarkdown,
   getStepLabel,
   getStepMeta,
+  stopGeneration
 } = usePlanChat();
 
 const drawerOpen = ref(false);
