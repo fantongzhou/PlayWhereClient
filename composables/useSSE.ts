@@ -12,6 +12,8 @@ export interface Message {
   statusLine: string;
   streaming: boolean;
   timestamp: number;
+  /** streaming 结束时刻（complete/error/中断时记录，用于"已深度思考 Xs"徽章） */
+  doneAt?: number;
 }
 
 let msgCounter = 0;
@@ -23,6 +25,8 @@ function toolLabel(tool: string): string {
     get_weather: '正在查询目的地天气...',
     search_meituan_travel: '正在搜索美团旅行数据...',
     get_route: '正在规划交通路线...',
+    get_route_tool: '正在规划交通路线...',
+    recall_user_memory: '正在检索历史记忆...',
   };
   return map[tool] || `正在调用 ${tool}...`;
 }
@@ -138,6 +142,10 @@ export function useSSE() {
                 if (event.data?.sessionId) localStorage.setItem('plan_session_id', event.data.sessionId);
                 if (event.message) { msg.statusLine = event.message; }
                 break;
+              case 'say':
+                // AI 对用户的中间播报（确认语/工具前进度）→ 正文气泡，和 response 同通道
+                if (event.content) { contentBuffer += event.content; scheduleFlush(); }
+                break;
               case 'thought':
                 if (event.content) { thinkingBuffer += event.content; scheduleFlush(); }
                 break;
@@ -145,23 +153,62 @@ export function useSSE() {
                 if (event.content) { thinkingBuffer += event.content; scheduleFlush(); }
                 msg.steps.push({ type: 'status', step: event.step || 0, content: event.content });
                 break;
-              case 'response':
-                if (event.content) { contentBuffer += event.content; scheduleFlush(); }
+              case 'response': {
+                // 与已流出的正文去重。Python 后端的正文已通过 say 逐 token 下发，
+                // 流结束时 response 会再发一遍完整 summary；Node 后端没有 say（正文只有 response）。
+                //
+                // 不能只用 endsWith 判断：后端空轮重试时，被放弃的那一轮正文已经流出，
+                // 成功轮的 response 只是前者的【一段】而非后缀（实测出现 A+B+C 后面又追加 A）。
+                // 因此：完全包含 → 整段跳过；部分重叠 → 只追加未覆盖的尾部。
+                const c = event.content || '';
+                if (c) {
+                  const combined = msg.content + contentBuffer;
+                  if (!combined.includes(c)) {
+                    let overlap = 0;
+                    const maxOv = Math.min(combined.length, c.length);
+                    for (let k = maxOv; k > 0; k--) {
+                      if (combined.endsWith(c.slice(0, k))) { overlap = k; break; }
+                    }
+                    const remainder = c.slice(overlap);
+                    if (remainder) { contentBuffer += remainder; scheduleFlush(); }
+                  }
+                }
                 break;
-              case 'action':
+              }
+              case 'action': {
                 msg.statusLine = toolLabel(event.tool || 'unknown');
-                msg.steps.push({ type: 'action', step: event.step || 0, tool: event.tool, args: event.args });
+                // 工具卡片：action 建卡（运行中），observation 按 FIFO 匹配完成
+                msg.steps.push({
+                  type: 'tool', step: event.step || 0,
+                  tool: event.tool, args: event.args,
+                  done: false, startedAt: Date.now(),
+                });
                 break;
-              case 'observation':
+              }
+              case 'observation': {
                 msg.statusLine = '正在分析数据...';
-                msg.steps.push({ type: 'observation', step: event.step || 0, data: event.data });
+                // FIFO 匹配最早一张运行中的工具卡（兼容顺序/并行两种事件序列）
+                const running = msg.steps.find(s => s.type === 'tool' && !s.done);
+                if (running) {
+                  running.done = true;
+                  running.endedAt = Date.now();
+                  running.data = event.data;
+                } else {
+                  // 兜底：observation 先于 action 到达（不该发生），退回独立步骤
+                  msg.steps.push({ type: 'observation', step: event.step || 0, data: event.data });
+                }
                 break;
+              }
               case 'complete':
+                flushAll(); // 先落盘 RAF 缓冲区，后续正文处理基于完整内容
                 msg.statusLine = '';
                 msg.streaming = false;
+                msg.doneAt = Date.now();
                 if (event.plan && event.plan.days?.length > 0) {
                   tripStore.setPlan(event.plan);
-                  msg.content = buildPlanSummary(event.plan);
+                  // 累加而非覆盖：保留流式期间的播报(say)和最终回复(response)，行程表格摘要追加在后面
+                  const base = msg.content.trimEnd();
+                  msg.content = base ? `${base}\n\n${buildPlanSummary(event.plan)}` : buildPlanSummary(event.plan);
                 } else if (msg.content.trim().startsWith('{')) {
                   msg.content = '⚠️ 未能生成有效行程，请重新描述您的需求';
                 }
@@ -169,6 +216,7 @@ export function useSSE() {
               case 'error':
                 flushAll();
                 msg.statusLine = '';
+                msg.doneAt = Date.now();
                 error.value = event.message;
                 msg.content += `\n\n⚠️ ${event.message}`;
                 msg.streaming = false;
@@ -181,6 +229,7 @@ export function useSSE() {
     } catch (e: any) {
       flushAll();
       const msg = messages.value.find(m => m.id === assistantId);
+      if (msg) msg.doneAt = Date.now();
       if (e.name === 'AbortError') {
         if (msg && msg.content) { msg.content += '\n\n---\n⏸️ *已中断*'; }
         else if (msg) { msg.content = '⏸️ 已取消'; }

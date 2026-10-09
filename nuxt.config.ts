@@ -25,7 +25,7 @@ export default defineNuxtConfig({
   nitro: {
     devProxy: {
       '/api': {
-        target: 'http://localhost:3333',
+        target: 'http://localhost:3334',
         changeOrigin: true,
       },
     },
@@ -35,7 +35,7 @@ export default defineNuxtConfig({
     server: {
       proxy: {
         '/api': {
-          target: 'http://localhost:3333',
+          target: 'http://localhost:3334',
           changeOrigin: true,
         },
       },

@@ -51,11 +51,11 @@ export interface TripPlan {
 
 // ---- SSE 事件 ----
 export type SSEEventType =
-  | 'start' | 'thought' | 'status' | 'response' | 'action' | 'observation'
+  | 'start' | 'say' | 'thought' | 'status' | 'response' | 'action' | 'observation'
   | 'complete' | 'error';
 
 /** ReAct 循环中会推入 msg.steps 的步骤类型 */
-export type ThinkingStepType = 'action' | 'observation' | 'status';
+export type ThinkingStepType = 'tool' | 'action' | 'observation' | 'status';
 
 export interface ThinkingStep {
   type: ThinkingStepType;
@@ -64,6 +64,11 @@ export interface ThinkingStep {
   tool?: string;
   args?: Record<string, unknown>;
   data?: unknown;
+  /** tool 卡片生命周期：action 到达时 false（运行中），observation 到达时 true */
+  done?: boolean;
+  /** tool 卡片耗时计算用（Date.now()） */
+  startedAt?: number;
+  endedAt?: number;
 }
 
 // ---- 预设选项 ----

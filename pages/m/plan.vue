@@ -12,19 +12,42 @@ const {
   messages,
   isStreaming,
   error,
+  isAtBottom,
   quickPrompts,
   handleSend,
   handleKeydown,
   handleQuickPrompt,
   handleNewChat,
   toggleSteps,
+  ensureAutoExpanded,
+  autoCollapseSteps,
+  thinkingSeconds,
   renderMarkdown,
   getStepLabel,
   getStepMeta,
+  recalledMemories,
+  kindLabel,
+  scrollToBottom,
   stopGeneration
 } = usePlanChat();
 
 const drawerOpen = ref(false);
+
+// 流式期间心跳：驱动"深度思考中 Xs"实时计数 + 面板自动展开/折叠
+const nowTick = ref(Date.now());
+let heartbeat: ReturnType<typeof setInterval> | null = null;
+watch(isStreaming, (streaming) => {
+  if (streaming) {
+    const last = messages.value[messages.value.length - 1];
+    if (last?.role === 'assistant') ensureAutoExpanded(last.id);
+    heartbeat = setInterval(() => { nowTick.value = Date.now(); }, 1000);
+  } else {
+    if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+    for (const m of messages.value) {
+      if (m.role === 'assistant') autoCollapseSteps(m.id);
+    }
+  }
+}, { immediate: true });
 
 // 规划完成后自动打开 drawer
 watch(hasPlan, (val) => {
@@ -63,7 +86,8 @@ function newChat() {
     <!-- ==================== Chat Area ==================== -->
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Messages -->
-      <div class="flex-1 overflow-y-auto px-4 py-3 space-y-3" ref="chatBodyRef">
+      <div class="relative flex-1 overflow-hidden">
+        <div class="h-full overflow-y-auto px-4 py-3 space-y-3" ref="chatBodyRef">
         <!-- 空状态 -->
         <div v-if="messages.length === 0" class="h-full flex flex-col items-center justify-center text-center px-2 gap-3">
           <div class="text-4xl">🗺️</div>
@@ -95,17 +119,56 @@ function newChat() {
           <div v-else-if="msg.role === 'assistant'" class="max-w-[95%] w-full animate-msg-fade-in">
             <div v-if="msg.thinkingContent || msg.steps.length > 0" class="mb-2 border border-gray-200 rounded-xl overflow-hidden bg-gray-50">
               <button class="flex items-center gap-1.5 w-full px-3 py-2 border-0 bg-transparent text-xs cursor-pointer text-slate-500 hover:bg-gray-100 transition-colors" @click="toggleSteps(msg.id)">
-                <span>{{ msg.streaming ? '🧠' : '✅' }}</span>
-                <span class="font-medium flex-1 text-left">{{ msg.streaming ? '思考中...' : '已完成深度思考' }}</span>
+                <span>{{ msg.streaming ? '🧠' : '✓' }}</span>
+                <span class="font-medium flex-1 text-left">{{ msg.streaming ? `深度思考中 ${thinkingSeconds(msg, nowTick)}s` : `已深度思考 ${thinkingSeconds(msg, nowTick)}s` }}</span>
                 <span class="text-[10px] text-slate-400">{{ showSteps[msg.id] ? '▾' : '▸' }}</span>
               </button>
               <div class="think-body" :class="{ expanded: showSteps[msg.id] }">
                 <div v-if="msg.thinkingContent" class="px-3 py-2 text-xs leading-relaxed text-slate-600 whitespace-pre-wrap border-b border-gray-200">{{ msg.thinkingContent }}</div>
-                <div v-for="(step, si) in msg.steps" :key="si" :class="['flex items-center gap-1.5 px-3 py-1 pl-5 text-[11px] text-slate-500 border-t border-gray-200 first:border-t-0', `step-${step.type}`]">
-                  <span class="step-dot w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
-                  <span class="flex-1">{{ getStepLabel(step) }}</span>
-                  <span class="text-[10px] text-slate-400">{{ getStepMeta(step) }}</span>
-                </div>
+
+                <!-- 工具卡片：action/observation 合并生命周期 -->
+                <details
+                  v-for="(step, si) in msg.steps" :key="si"
+                  v-show="step.type === 'tool' || step.type === 'status' || step.type === 'action' || step.type === 'observation'"
+                  :class="['border-t border-gray-200 first:border-t-0 group/tool', step.type === 'tool' ? '' : `step-${step.type}`]"
+                >
+                  <div v-if="step.type !== 'tool'" class="flex items-center gap-1.5 px-3 py-1 pl-5 text-[11px] text-slate-500">
+                    <span class="step-dot w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
+                    <span class="flex-1">{{ getStepLabel(step) }}</span>
+                    <span class="text-[10px] text-slate-400">{{ getStepMeta(step) }}</span>
+                  </div>
+
+                  <summary v-else class="flex items-center gap-1.5 px-3 py-1 pl-5 text-[11px] cursor-pointer list-none select-none text-slate-500 active:bg-gray-100/70">
+                    <svg v-if="!step.done" class="w-3 h-3 shrink-0 animate-spin text-indigo-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle class="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                      <path class="opacity-90" d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="4" stroke-linecap="round" />
+                    </svg>
+                    <svg v-else class="w-3 h-3 shrink-0 text-emerald-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <span class="flex-1" :class="step.done ? '' : 'text-slate-600 font-medium'">{{ getStepLabel(step) }}</span>
+                    <span v-if="getStepMeta(step)" class="text-[10px] text-slate-400 tabular-nums">{{ getStepMeta(step) }}</span>
+                  </summary>
+                  <div v-if="step.type === 'tool' && step.done" class="hidden group-open/tool:block px-3 pb-1.5 pl-8">
+                    <!-- 记忆检索：渲染成可读列表（原始 JSON 对用户没意义） -->
+                    <template v-if="step.tool === 'recall_user_memory'">
+                      <div v-if="recalledMemories(step).length" class="space-y-1">
+                        <div
+                          v-for="(mem, mi) in recalledMemories(step)" :key="mi"
+                          class="flex items-start gap-1.5 text-[10px] bg-white border border-gray-100 rounded-lg px-1.5 py-1"
+                        >
+                          <span class="shrink-0 px-1 rounded bg-indigo-50 text-indigo-600 font-medium">{{ kindLabel(mem.kind) }}</span>
+                          <span class="flex-1 text-slate-600 leading-relaxed">{{ mem.content }}</span>
+                        </div>
+                      </div>
+                      <p v-else class="text-[10px] text-slate-400">暂无相关记忆</p>
+                    </template>
+                    <template v-else>
+                      <pre v-if="step.args" class="text-[10px] text-slate-500 bg-white border border-gray-100 rounded-lg p-1.5 mb-1 overflow-x-auto">参数: {{ JSON.stringify(step.args) }}</pre>
+                      <pre class="text-[10px] text-slate-500 bg-white border border-gray-100 rounded-lg p-1.5 overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap">{{ JSON.stringify(step.data, null, 0)?.slice(0, 400) }}{{ (JSON.stringify(step.data) || '').length > 400 ? '…' : '' }}</pre>
+                    </template>
+                  </div>
+                </details>
               </div>
             </div>
             <!-- 思考状态行 -->
@@ -114,11 +177,30 @@ function newChat() {
               <span>{{ msg.statusLine }}</span>
             </div>
 
-            <div class="ai-content text-sm leading-relaxed text-slate-700" :class="{ streaming: msg.streaming }" v-html="renderMarkdown(msg.content)" />
+            <!-- 首 token 等待态：三点脉冲 -->
+            <div v-if="!msg.content && msg.streaming" class="flex items-center gap-1.5 py-1.5" aria-label="正在思考">
+              <span class="typing-dot" /><span class="typing-dot" style="animation-delay: 0.15s" /><span class="typing-dot" style="animation-delay: 0.3s" />
+            </div>
+            <div v-else class="ai-content text-sm leading-relaxed text-slate-700" :class="{ streaming: msg.streaming }" v-html="renderMarkdown(msg)" />
             <span v-if="msg.streaming" class="typing-cursor inline-block w-0.5 h-4 bg-blue-600 ml-0.5 align-text-bottom rounded-sm animate-cursor-blink" />
           </div>
         </div>
         <div v-if="error" class="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-xl text-xs">⚠️ {{ error }}</div>
+        </div>
+
+        <!-- 回到底部药丸按钮（用户上翻离开底部时出现） -->
+        <Transition name="pill-fade">
+          <button
+            v-if="!isAtBottom"
+            class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-full shadow-md text-xs text-slate-600 active:text-blue-600 transition-colors"
+            aria-label="回到底部"
+            @click="scrollToBottom(true)"
+          >
+            <span class="text-[10px]">↓</span>
+            <span v-if="isStreaming">回到底部（生成中）</span>
+            <span v-else>回到底部</span>
+          </button>
+        </Transition>
       </div>
 
       <!-- Input -->
@@ -207,6 +289,12 @@ function newChat() {
 </template>
 
 <style scoped>
+/* 药丸按钮淡入淡出 */
+.pill-fade-enter-active { transition: opacity 0.15s ease, transform 0.15s ease; }
+.pill-fade-leave-active { transition: opacity 0.1s ease, transform 0.1s ease; }
+.pill-fade-enter-from,
+.pill-fade-leave-to { opacity: 0; transform: translate(-50%, 4px); }
+
 /* 思考面板 */
 .think-body {
   max-height: 0;
@@ -218,11 +306,23 @@ function newChat() {
   overflow-y: auto;
 }
 
-/* 步骤类型标识 */
+/* 步骤类型标识（非工具卡片） */
 .step-action .step-dot { background: #f59e0b; }
 .step-observation .step-dot { background: #10b981; }
 .step-status .step-dot { background: #3b82f6; }
+details > summary::-webkit-details-marker { display: none; }
 .ai-content.streaming { display: inline; }
+
+/* 首 token 三点脉冲 */
+.typing-dot {
+  width: 5px; height: 5px; border-radius: 9999px;
+  background: #94a3b8;
+  animation: typing-pulse 1.2s ease-in-out infinite;
+}
+@keyframes typing-pulse {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
 
 /* Drawer 过渡动画 */
 .drawer-slide-enter-active { transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
